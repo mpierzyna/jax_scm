@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import cases
-from scm.closures.ysu import init_ysu_closure
+from scm.closures.mynn import init_mynn, ProgVarsMYNN, DiagVarsMYNN
 from scm.grid import StaggeredGrid
 from scm.interfaces import DiagVars, ProgVars, StaticForcing, ModelFn, ClosureFn, TransientForcing
 from scm.mo import MOSimilarityFuncs, init_mo_sfc, MOResult, BusingerDyerSimFuncs
@@ -56,9 +56,9 @@ def init_model(grid: StaggeredGrid, sfc: SurfaceProperties, closure_fn: ClosureF
     )
 
     @jax.jit
-    def _model(state: ProgVars, forcing: StaticForcing) -> Tuple[ProgVars, DiagVars]:
+    def _model(state: ProgVarsMYNN, forcing: StaticForcing) -> Tuple[ProgVars, DiagVars]:
         # Unpack state
-        u, v, th, q = state.u, state.v, state.th, state.q
+        u, v, q = state.u, state.v, state.q
 
         # Unpack forcing
         f_c = forcing.f_c
