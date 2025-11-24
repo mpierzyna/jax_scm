@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import jax.random
 import matplotlib.pyplot as plt
 
+from scm import consts
 from scm.grid import StaggeredGrid
 from scm.interfaces import ProgVars, TransientForcing
 
@@ -133,8 +134,8 @@ def get_ysu(Nz: int = 138, plot: bool = False) -> Tuple[StaggeredGrid, ProgVars,
     def _shfx(t_s: jnp.ndarray) -> jnp.ndarray:
         """Surface heat flux as function of time in seconds after simulation begin."""
         t_h = t_s / 3600.0  # time in hours
-        shfx = jnp.sin((t_h + 2) * jnp.pi / 12) * 400  # W/m2
-        shfx = shfx / 1216  # convert to (K m/s)
+        shfx = jnp.sin((t_h + 2) * jnp.pi / 12) * 400  # W/m2 = J/(s m2)
+        shfx = shfx / (consts.rho_0 * consts.cp)  # convert to (K m/s)
         return shfx
 
     @jax.jit

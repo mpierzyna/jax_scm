@@ -41,18 +41,25 @@ def init_ysu_closure(grid: scm.grid.StaggeredGrid) -> ClosureFn:
     - index a: lowest model level
     - index 0: surface
 
+
+    References
+    ----------
+    [1]_ Hong, Song-You, and Hua-Lu Pan. “Nonlocal Boundary Layer Vertical Diffusion in a Medium-Range Forecast Model.”
+         Monthly Weather Review, vol. 124, no. 10, Oct. 1996, pp. 2322–39. Monthly Weather Review. journals.ametsoc.org,
+         https://doi.org/10.1175/1520-0493(1996)124%253C2322:NBLVDI%253E2.0.CO;2.
+    [2]_ https://github.com/wrf-model/WRF/blob/release-v4.5.1/phys/module_bl_ysu.F
     """
     rib_cr_1 = 0.5  # Critical Richardson number (initial blh), inline after eq. 3
     rib_cr_2 = 0.0  # Critical Richardson number (enhanced blh), inline after eq. A12
-    b = 7.8  # inline after eq. 2
+    a = b = 6.8  # following WRF [2]
     p = 2
-    d1, d2 = 0.02, 0.05  # constants, inline after eq. A14.
+    d1, d2, d3 = 0.02, 0.05, 0.001  # constants, inline after eq. A14., d3 from [2]
     lam0 = 150  # m, inline after eq. 17
 
     zh = grid.zh
 
     @jax.jit
-    def _get_w_s(h, w_thv_s, u_st, L, th_va, z):
+    def _get_w_s_Pr(h, w_thv_s, u_st, L, th_va, z):
         # Flux profiles evaluated at top of SL (=0.1 h)
         phi_m = jnp.where(
             w_thv_s >= 0,
@@ -186,8 +193,8 @@ def init_ysu_closure(grid: scm.grid.StaggeredGrid) -> ClosureFn:
         # Gradient of virtual potential temperature needed later
         dthv_dz = jnp.zeros(grid.Nz_h)
         dthv_dz = dthv_dz.at[1:-1].set((th_v[1:] - th_v[:-1]) / grid.dz)
-        dthv_dz = dthv_dz.at[0].set(grads.th[0])  # todo: maybe chain rule
-        dthv_dz = dthv_dz.at[-1].set(grads.th[-1])  # todo: maybe chain rule
+        dthv_dz = dthv_dz.at[0].set(grads.th[0])
+        dthv_dz = dthv_dz.at[-1].set(grads.th[-1])
 
         # Dry and virtual potential temperature at lowest model level
         th_a = th[0]
@@ -199,24 +206,29 @@ def init_ysu_closure(grid: scm.grid.StaggeredGrid) -> ClosureFn:
         ## BLH (z < h)
         # Initial guess for h without th_T
         h = _get_blh_init(m=m, th_v=th_v, th_va=th_va)
-        w_s0, _ = _get_w_s(h=h, w_thv_s=w_thv_s, u_st=u_st, L=L_ob, th_va=th_va, z=h / 2)  # at z=h/2, inline after (A3)
+        w_s0, _ = _get_w_s_Pr(
+            h=h, w_thv_s=w_thv_s, u_st=u_st, L=L_ob, th_va=th_va, z=h / 2
+        )  # at z=h/2, inline after (A3)
 
         # Enhanced h
         th_t = jnp.minimum(b * w_thv_s / w_s0, 3)  # eq. 2, capped at 3K, p. 2320
         h, (i_h_bot, i_h_top) = _get_blh_enhanced(m, th_v, th_va, th_t)
-        w_s, Pr = _get_w_s(h=h, w_thv_s=w_thv_s, u_st=u_st, L=L_ob, th_va=th_va, z=zh)
+
+        # Recalculate velocity scales with final h
+        w_s, Pr = _get_w_s_Pr(h=h, w_thv_s=w_thv_s, u_st=u_st, L=L_ob, th_va=th_va, z=zh)
 
         # Eddy diffusivities z < h
         Km_bl = consts.kappa * w_s * zh * (1 - zh / h) ** p  # eq. A1
-        Kt_bl = Km_bl / Pr  # todo: check
+        Kt_bl = Km_bl / Pr  # correct, see [2] l. 1151
 
+        ## Entrainment zone (z = ca. h)
         # Entrainment fluxes, inline after eq. A8
         w_st_cubed = (consts.g / th_a) * w_th_s * h  # DRY air velocity scale
         w_m = (5 * u_st**3 + w_st_cubed) ** (1 / 3)  # inline after eq. A8
-        w_thv_h = -0.15 * (th_va / consts.g) * w_m**3 / h  # eq. A9, bouyancy flux at top of bl
+        w_thv_h = -0.15 * (th_va / consts.g) * w_m**3 / h  # eq. A9, bouyancy flux at top of bl (negative)
 
         w_e = w_thv_h / (th_v[i_h_top] - th_v[i_h_bot])  # eq. A11, Entrainment rate
-        w_e = jnp.clip(w_e, min=None, max=w_m)  # Limit entrainment rate to mixed-layer velocity scale
+        w_e = jnp.maximum(w_e, -w_m)  # Limit entrainment rate to magnitude of mixed-layer velocity
         Pr_h = 1  # inline after eq. A11
 
         w_th_h = w_e * (th[i_h_top] - th[i_h_bot])  # eq. A10a, DRY pot temp!
@@ -224,7 +236,7 @@ def init_ysu_closure(grid: scm.grid.StaggeredGrid) -> ClosureFn:
         u_w_h = Pr_h * w_e * (u[i_h_top] - u[i_h_bot])  # eq. A10c
         v_w_h = Pr_h * w_e * (v[i_h_top] - v[i_h_bot])  # eq. A10d
 
-        ## Entrainment zone (z = ca. h)
+        # Entrainment zone thickness
         d_thv_con = 0.001 * h  # theoretically, thv[h_idx] - thv[h_idx-1], but practically not. See after eq. A14
         Ri_con = ((consts.g / th_va) * d_thv_con * h) / w_m**2  # inline after eq. A14
         delta = (d1 + d2 / Ri_con) * h  # thickness of entrainment zone

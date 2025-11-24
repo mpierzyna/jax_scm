@@ -263,7 +263,10 @@ if __name__ == "__main__":
 
     # Init and run model
     model = init_model(grid, sfc, closure_fn=init_ysu_closure(grid=grid))
-    state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=1, t_end_s=2000, dt_out_s=10, ode_int="euler")
+    state_hist, diag_hist, t = simulate(
+        model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 10, dt_out_s=10, ode_int="euler"
+    )
+    # state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=1, t_end_s=60 * 60 * 5, dt_out_s=60, ode_int="euler")
 
     # Save output
     ds = make_dataset(state_hist, diag_hist, time=t, grid=grid)
