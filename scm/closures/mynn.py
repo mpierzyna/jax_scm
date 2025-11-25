@@ -6,7 +6,6 @@ import jax.numpy as jnp
 
 from scm import consts
 from scm.grid import StaggeredGrid
-from scm.interfaces import ClosureFn
 from scm.mo import MOResult
 
 
@@ -48,6 +47,9 @@ class DiagVarsMYNN:
     q_sq_P_B: jnp.ndarray  # TKE production by buoyancy
     q_sq_eps: jnp.ndarray  # TKE dissipation
 
+    # Auxiliary parameters
+    ct2: jnp.ndarray  # temperature structure function coefficient
+
 
 class MYNNClosureFn(Protocol):
     def __call__(self, state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
@@ -65,11 +67,12 @@ def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
     A1, A2, B1, B2, C1 = 1.18, 0.665, 24.0, 15.0, 0.137  # eq 66, NN09
     C2, C3, C4, C5 = 0.75, 0.352, 0.0, 0.2  # eq 66, NN09
     gamma1 = 0.235  # below A4, NN09
+    q_sq_min = 1e-10  # minimum TKE to avoid div by zero  # todo: check wrf implementation
 
     def _closure(state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
         # in MYNN, q_sq is 2*TKE not specific humidity!
         u, v, thv = state.u, state.v, state.thv
-        q = jnp.sqrt(state.q_sq)
+        q = jnp.sqrt(jnp.clip(state.q_sq, min=q_sq_min))  # clip to avoid div by zero
         q = jnp.pad((q[1:] + q[:-1]) / 2, 1, mode="edge")  # interp to half-levels  # todo: maybe pad to zero
 
         # Attention! Currently, consider dry atmosphere only
@@ -196,6 +199,9 @@ def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
         L_full = (L[1:] + L[:-1]) / 2  # average first to eliminate L=0 at surface leading to div by zero below
         eps = state.q_sq ** (3 / 2) / (B1 * L_full)  # dissipation, eq. 12, NN09
 
+        # Ct2
+        ct2 = 3.2 * B1 ** (1 / 3) / B2 * L ** (-2 / 3) * th_th
+
         return DiagVarsMYNN(
             u_w=u_w,
             v_w=v_w,
@@ -211,6 +217,7 @@ def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
             q_sq_P_S=P_S,
             q_sq_P_B=P_B,
             q_sq_eps=eps,
+            ct2=ct2,
         )
 
     return _closure
