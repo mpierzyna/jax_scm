@@ -13,11 +13,9 @@ from scm.closures.mynn import init_mynn, ProgVarsMYNN, DiagVarsMYNN
 from scm.grid import StaggeredGrid
 from scm.interfaces import StaticForcing, ModelFn, ClosureFn, TransientForcing
 from scm.mo import MOSimilarityFuncs, init_mo_sfc, MOResult, BusingerDyerSimFuncs
-from scm.odeint import METHODS as ODE_METHODS
-from scm.odeint import init_time_stepper
 from scm.utils import make_dataset
 
-jax.config.update("jax_disable_jit", True)
+# jax.config.update("jax_disable_jit", True)
 jax.config.update("jax_enable_x64", True)
 # jax.config.update("jax_platforms", "cpu")
 # jax.config.update("jax_debug_nans", True)
@@ -134,6 +132,22 @@ def update_dc_obj(d: T, **updates) -> T:
     return d.__class__(**d_dict)
 
 
+def init_time_stepper(model: ModelFn, dt: float) -> ModelFn:
+    @jax.jit
+    def _euler(state: ProgVarsMYNN, **kwargs) -> Tuple[ProgVarsMYNN, DiagVarsMYNN]:
+        """Euler integration"""
+        tends, diag = model(state, **kwargs)
+        state_next = ProgVarsMYNN(
+            u=state.u + dt * tends.u,
+            v=state.v + dt * tends.v,
+            thv=state.thv + dt * tends.thv,
+            q_sq=jnp.clip(state.q_sq + dt * tends.q_sq, min=0),
+        )
+        return state_next, diag
+
+    return _euler
+
+
 def simulate(
     model: ModelFn,
     ic: ProgVarsMYNN,
@@ -141,7 +155,6 @@ def simulate(
     dt_s: float,
     t_end_s: float,
     dt_out_s: float,
-    ode_int: ODE_METHODS,
 ) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, jnp.ndarray]:
     # Setup time arrays
     t_outer = jnp.arange(0, t_end_s, dt_out_s)
@@ -153,7 +166,7 @@ def simulate(
     )
 
     # Create time stepper
-    model_stepper = init_time_stepper(model, dt=dt_s, method=ode_int)
+    model_stepper = init_time_stepper(model, dt=dt_s)
 
     # Create forcing evaluation function
     get_forcing = forcing.get_eval_fn()
@@ -248,6 +261,8 @@ def plot_sfc_hist(hist: List[DiagVarsMYNN | ProgVarsMYNN], t: jnp.ndarray, keys:
                 raise ValueError(f"Unexpected dimension for key '{k}': {v.ndim}")
 
     fig, axarr = plt.subplots(nrows=len(keys), figsize=(5, len(keys) * 1), sharex="all", constrained_layout=True)
+    if len(keys) == 1:
+        axarr = [axarr]  # Make it iterable
     for ax, k in zip(axarr, keys):
         ax.plot(t, sfc_vals[k])
         ax.set_xlabel("Time, s")
@@ -264,6 +279,21 @@ def unstack_hist(v: T) -> List[T]:
     return [v_class(**{k: v_dict[k][i] for k in v_dict}) for i in range(n)]
 
 
+def init_from_xr(f: str, t: float) -> ProgVarsMYNN:
+    """Initialize model state from xarray dataset at time t."""
+    import xarray as xr
+
+    ds = xr.open_dataset(f)
+    ds_t = ds.sel(time=t, method="nearest")
+    state = ProgVarsMYNN(
+        u=jnp.array(ds_t["u"].values),
+        v=jnp.array(ds_t["v"].values),
+        thv=jnp.array(ds_t["thv"].values),
+        q_sq=jnp.array(ds_t["q_sq"].values),
+    )
+    return state
+
+
 if __name__ == "__main__":
     # Ekman spiral
     # grid, init, forcing = cases.get_ekman(Nz=100)
@@ -276,13 +306,12 @@ if __name__ == "__main__":
         thv=init.th,
         q_sq=jnp.ones(grid.Nz) * 0.01,
     )
+    # init = init_from_xr("out_debug.nc", t=5947)
     sfc = SurfaceProperties(z0m=0.1, z0h=0.1, sim_funcs=BusingerDyerSimFuncs(), prescribe="w_th_s")
 
     # Init and run model
     model = init_model(grid, sfc)
-    state_hist, diag_hist, t = simulate(
-        model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 10, dt_out_s=10, ode_int="euler"
-    )
+    state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 10.5, dt_out_s=60 * 10)
     # state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=1, t_end_s=60 * 60 * 5, dt_out_s=60, ode_int="euler")
 
     # Save output

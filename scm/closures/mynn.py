@@ -68,8 +68,9 @@ def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
 
     def _closure(state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
         # in MYNN, q_sq is 2*TKE not specific humidity!
-        u, v, thv, q_sq = state.u, state.v, state.thv, state.q_sq
-        q = jnp.sqrt(q_sq)
+        u, v, thv = state.u, state.v, state.thv
+        q = jnp.sqrt(state.q_sq)
+        q = jnp.pad((q[1:] + q[:-1]) / 2, 1, mode="edge")  # interp to half-levels  # todo: maybe pad to zero
 
         # Attention! Currently, consider dry atmosphere only
         qv = ql = 0  # specific humidity of vapor and liquid water
@@ -80,24 +81,24 @@ def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
         # Reference potential temperature at lowest grid level
         th_0 = th[0]  # todo: correct? surface?
 
-        ## Length scale
+        ## Length scale (all on half-levels)
         # Surface length scale (eq 53, NN09)
-        zeta = grid.z / mo_res.L
+        zeta = grid.zh / mo_res.L
         L_S = jnp.where(
             zeta < 0,
-            consts.kappa * grid.z * (1 - 100 * zeta) ** 0.2,
+            consts.kappa * grid.zh * (1 - 100 * zeta) ** 0.2,
             jnp.where(
                 zeta < 1,
-                consts.kappa * grid.z * (1 + 2.7 * zeta) ** (-1),  # 0 <= zeta < 1
-                consts.kappa * grid.z / 3.7,  # zeta >= 1
+                consts.kappa * grid.zh * (1 + 2.7 * zeta) ** (-1),  # 0 <= zeta < 1
+                consts.kappa * grid.zh / 3.7,  # zeta >= 1
             ),
         )
 
         # Turbulent length scale (eq 54, NN09)
-        L_T = 0.23 * jnp.trapezoid(q * grid.z, grid.z) / jnp.trapezoid(q, grid.z)
+        L_T = 0.23 * jnp.trapezoid(q * grid.zh, grid.zh) / jnp.trapezoid(q, grid.zh)  # todo: maybe better on non-interp
 
         # Buoyance length scale (eq 55, NN09)
-        N = jnp.sqrt(consts.g / th_0 * grads.thv)
+        N = jnp.sqrt(consts.g / th_0 * grads.thv)  # todo: produces NaN for negative grads.thv. Caught below but fix
         q_c = ((consts.g / th_0) * w_thv_0 * L_T) ** (1 / 3)  # in line after eq 55, NN09
         L_B = jnp.where(
             grads.thv <= 0,
@@ -177,18 +178,23 @@ def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
         v_w = -Km * grads.v
         thv_w = -Kh * grads.thv
 
+        # TKE turbulent transport
+        q_sq_tt = L * q * Sq * grads.q_sq  # eq 24, MY82, todo, sign?
+
         # Parameterized pot. temp. variance
         lam2 = B2 * L  # eq 12, MY82
         th_w = thv_w  # todo: proper conversion
         th_th = -lam2 / q * th_w * dth_dz  # eq 29, MY82
 
-        # TKE production and dissipation
+        # TKE production and dissipation (needed on full levels)
         P_S = -(u_w * grads.u + v_w * grads.v)  # shear production, eq. 5, NN09
-        P_B = consts.g / th_0 * thv_w  # buoyancy production, eq. 5, NN09
-        eps = q**3 / (B1 * L)  # dissipation, eq. 12, NN09
+        P_S = (P_S[1:] + P_S[:-1]) / 2  # average to full levels
 
-        # TKE turbulent transport
-        q_sq_tt = L * q * Sq * grads.q_sq  # eq 24, MY82, todo, sign?
+        P_B = consts.g / th_0 * thv_w  # buoyancy production, eq. 5, NN09
+        P_B = (P_B[1:] + P_B[:-1]) / 2  # average to full levels
+
+        L_full = (L[1:] + L[:-1]) / 2  # average first to eliminate L=0 at surface leading to div by zero below
+        eps = state.q_sq ** (3 / 2) / (B1 * L_full)  # dissipation, eq. 12, NN09
 
         return DiagVarsMYNN(
             u_w=u_w,

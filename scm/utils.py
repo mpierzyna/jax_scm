@@ -16,18 +16,27 @@ def make_dataset(
     grid: StaggeredGrid,
 ) -> xr.Dataset:
     """Convert history to xarray Dataset."""
+
+    def _get_dims(a: jnp.ndarray) -> tuple[str, ...]:
+        if a.ndim == 1:
+            return ("time",)
+        elif a.ndim == 2:
+            _, nz = a.shape
+            if nz == grid.Nz:
+                return ("time", "z")
+            elif nz == grid.Nz_h:
+                return ("time", "zh")
+            else:
+                raise ValueError(f"Unexpected vertical dimension size: {nz}")
+        else:
+            raise ValueError(f"Unsupported number of dimensions: {a.ndim}")
+
     state_dict = dataclasses.asdict(state_hist)
-    state_dict = {v: (("time", "z"), v_data) for v, v_data in state_dict.items()}
-    state_ds = xr.Dataset(state_dict, coords={"time": time, "z": grid.z})
+    state_dict = {v: (_get_dims(v_data), v_data) for v, v_data in state_dict.items()}
+    state_ds = xr.Dataset(state_dict, coords={"time": time, "z": grid.z, "zh": grid.zh})
 
     diag_dict = dataclasses.asdict(diag_hist)
-    diag_dict = {
-        v: (
-            ("time", "zh") if diag_dict[v].ndim == 2 else ("time",),
-            v_data,
-        )
-        for v, v_data in diag_dict.items()
-    }
-    diag_ds = xr.Dataset(diag_dict, coords={"time": time, "zh": grid.zh})
+    diag_dict = {v: (_get_dims(v_data), v_data) for v, v_data in diag_dict.items()}
+    diag_ds = xr.Dataset(diag_dict, coords={"time": time, "zh": grid.zh, "z": grid.z})
 
     return xr.merge([state_ds, diag_ds])
