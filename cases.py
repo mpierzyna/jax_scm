@@ -23,16 +23,15 @@ def get_gabls1(
     vg = jnp.zeros(Nz)  # m/s
 
     # Surface temperature forcing
-    th_sfc_0 = 263.5  # K
-    th_sfc_fn = lambda t_s: th_sfc_0 - 0.25 * t_s / (60 * 60)  # K, 0.25 K per hour cooling
+    th_s_0 = 263.5  # K
+    th_s_fn = lambda t_s: th_s_0 - 0.25 * t_s / (60 * 60)  # K, 0.25 K per hour cooling
 
     forcing = TransientForcing(
-        u_geo=lambda t: ug,
-        v_geo=lambda t: vg,
+        u_geo=lambda t_s: ug,
+        v_geo=lambda t_s: vg,
         f_c=1.39e-4,  # 1/s, ~73 deg latitude
-        # todo: implement forcing with sfc temp. Also, remove 1/10 factor below. This is a bug in MOST somewhere.
-        w_th_s=lambda t: jnp.array(-0.08 / 10),  # K m/s, constant surface cooling
-        w_q_s=lambda t: jnp.array(0.0),  # g/kg m/s
+        th_s=th_s_fn,
+        w_q_s=lambda t_s: jnp.array(0.0),  # g/kg m/s
     )
 
     ## Initial conditions
@@ -89,7 +88,7 @@ def get_gabls1(
         axarr[0].legend()
 
         t = jnp.array([0, 9 * 60 * 60])  # 0 and 9 hours
-        axarr[1].plot(t, th_sfc_fn(t))
+        axarr[1].plot(t, th_s_fn(t))
         axarr[1].set_xlabel("Time, s")
         axarr[1].set_ylabel("Surface Potential Temperature (K)")
 

@@ -76,14 +76,6 @@ class StaticForcing:
     # Capping inversion at domain top
     dth_dz_top: float = 0.01  # Unit: (K/m)
 
-    # def __post_init__(self):
-    #     """Validate the forcing parameters."""
-    #     # Ensure that only one of w_th_s or th_s is set
-    #     if self.w_th_s is not None and self.th_s is not None:
-    #         raise ValueError("Only one of w_th_s or th_s can be set.")
-    #     if self.w_th_s is None and self.th_s is None:
-    #         raise ValueError("At least one of w_th_s or th_s must be set.")
-
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -95,8 +87,11 @@ class TransientForcing:
     # Coriolis parameter
     f_c: float  # Unit: (1/s); remains static
 
-    # Surface heat and moisture fluxes
-    w_th_s: ForcingFn  # Unit: (K m/s); must return scalar
+    # Surface heat flux or temperature
+    w_th_s: ForcingFn | None = None  # Unit: (K m/s); must return scalar
+    th_s: ForcingFn | None = None  # Unit: K, must return scalar
+
+    # Latent heat flux
     w_q_s: ForcingFn  # Unit: (kg/kg m/s); must return scalar
 
     # Capping inversion at domain top
@@ -104,6 +99,10 @@ class TransientForcing:
 
     def get_eval_fn(self) -> Callable[[jnp.ndarray], StaticForcing]:
         """Evaluate the transient forcing at time t_s to produce a StaticForcing instance."""
+        if self.w_th_s is None and self.th_s is None:
+            raise ValueError("At least one of w_th_s or th_s must be set.")
+        if self.w_th_s is not None and self.th_s is not None:
+            raise ValueError("Only one of w_th_s or th_s can be set.")
 
         @jax.jit
         def _eval_fn(t_s: jnp.ndarray) -> StaticForcing:
@@ -111,9 +110,9 @@ class TransientForcing:
                 u_geo=self.u_geo(t_s),
                 v_geo=self.v_geo(t_s),
                 f_c=self.f_c,
-                w_th_s=self.w_th_s(t_s),
+                w_th_s=self.w_th_s(t_s) if self.w_th_s is not None else None,
+                th_s=self.th_s(t_s) if self.th_s is not None else None,
                 w_q_s=self.w_q_s(t_s),
-                th_s=None,
                 dth_dz_top=self.dth_dz_top,
             )
 

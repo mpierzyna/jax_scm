@@ -33,7 +33,6 @@ class SurfaceProperties:
     z0m: float
     z0h: float
     sim_funcs: MOSimilarityFuncs
-    prescribe: Literal["th_s", "w_th_s"]  # todo: I don't like this here
 
     @property
     def mh_ratio(self):
@@ -63,17 +62,19 @@ def d_dz(a: jnp.ndarray, dz: float, bot: jnp.ndarray | float | str, top: jnp.nda
     return da_dz
 
 
-def init_model(grid: StaggeredGrid, sfc: SurfaceProperties) -> ModelFn:
-
+def init_model(
+    grid: StaggeredGrid,
+    sfc: SurfaceProperties,
+    prescribe_sfc_heat: Literal["w_th_s", "th_s"],
+) -> ModelFn:
     # Create MO model
     z_mo = float(grid.z[0])
     eval_mo = init_mo_sfc(
         z0m=sfc.z0m,
         z0h=sfc.z0h,
         z=z_mo,
-        z_grad=z_mo / 2,  # Halfway between surface and first full level
         sim_funcs=sfc.sim_funcs,
-        prescribe=sfc.prescribe,
+        prescribe=prescribe_sfc_heat,
     )
 
     # Init MYNN scheme
@@ -94,7 +95,6 @@ def init_model(grid: StaggeredGrid, sfc: SurfaceProperties) -> ModelFn:
         mo_res: MOResult = eval_mo(u_0=u[0], v_0=v[0], th_0=th[0], w_th_s=w_th_s, th_s=th_s, w_q_s=w_q_s)
 
         # todo: proper conversion
-        dthv_dz_s = mo_res.dth_dz
         dthv_dz_top = forcing.dth_dz_top
         w_thv_s = mo_res.w_th
 
@@ -322,11 +322,11 @@ if __name__ == "__main__":
     # # init = init_from_xr("out_debug.nc", t=t_debug)
 
     # GABLS
-    grid, init, forcing = cases.get_gabls1()
-    sfc = SurfaceProperties(z0m=0.1, z0h=0.1, sim_funcs=BusingerDyerSimFuncs(), prescribe="w_th_s")
+    grid, init, forcing = cases.get_gabls1(Nz=200)
+    sfc = SurfaceProperties(z0m=0.1, z0h=0.1, sim_funcs=BusingerDyerSimFuncs())
 
     # Init and run model
-    model = init_model(grid, sfc)
+    model = init_model(grid, sfc, prescribe_sfc_heat="th_s")
     # state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 10, dt_out_s=0.1)
     state_hist, diag_hist, mo_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 9, dt_out_s=60 * 5)
 
