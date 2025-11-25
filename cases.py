@@ -229,7 +229,74 @@ def get_ekman(Nz: int = 100, plot: bool = False):
     return grid, init, forcing
 
 
+def get_wangara(Nz: int = 50, plot: bool = False) -> Tuple[StaggeredGrid, ProgVarsMYNN, TransientForcing]:
+    """Wangara initial conditions and forcing."""
+    import pandas as pd
+
+    ## Grid
+    grid = StaggeredGrid(H=2000, Nz=Nz)
+
+    ## Forcing
+    # t_s = 0 corresponds to 00 local time
+    w_thl_fn = lambda t_s: 2.16e-1 * jnp.cos(((t_s / 3600) - 13) / 11 * jnp.pi)  # K m/s
+    w_qw_fn = lambda t_s: 2.29e-5 * jnp.cos(((t_s / 3600) - 13) / 11 * jnp.pi)  #  m/s
+    dthl_dz_top = 0.0075  # K/m
+
+    u_g = jnp.where(
+        grid.z < 1000,
+        -5.5 + 2.9e-3 * grid.z,  # linear decrease from -5.5m/s to -2.6m/s at 1000m
+        -2.6 + 1.4e-3 * (grid.z - 1000),  # linear decrease from -2.6m/s to -1.2m/s at 2000m
+    )
+    v_g = jnp.zeros(grid.Nz)
+
+    forcing = TransientForcing(
+        u_geo=lambda t_s: u_g,
+        v_geo=lambda t_s: v_g,
+        f_c=1.39e-4,
+        w_th_s=w_thl_fn,
+        w_q_s=w_qw_fn,
+        dth_dz_top=dthl_dz_top,
+    )
+
+    ## Initial conditions from observations
+    df = pd.read_csv("references/wangara/input.dat", sep="\t", names=["u", "v", "th"])
+    df["z"] = jnp.linspace(0, 2000, len(df))
+
+    init = ProgVarsMYNN(
+        u=jnp.interp(grid.z, df["z"].values, df["u"].values),
+        v=jnp.interp(grid.z, df["z"].values, df["v"].values),
+        thv=jnp.interp(grid.z, df["z"].values, df["th"].values),
+        q_sq=jnp.ones(grid.Nz) * 0.01,  # small initial TKE
+    )
+
+    if plot:
+        # Initial conditions
+        fig, (ax_uv, ax_th) = plt.subplots(ncols=2, figsize=(8, 4), layout="constrained")
+        ax_uv.plot(init.u, grid.z, label="u")
+        ax_uv.plot(init.v, grid.z, label="v")
+        ax_uv.set_xlabel("Wind (m/s)")
+        ax_uv.set_ylabel("Height (m)")
+        ax_uv.legend()
+        ax_th.plot(init.thv, grid.z)
+        ax_th.set_xlabel("Potential Temperature (K)")
+        fig.show()
+
+        # Forcing plots
+        t = jnp.linspace(0, 16 * 3600, 100)  # 16 hours
+        fig, (ax_shfx, ax_lhfx) = plt.subplots(ncols=2, figsize=(8, 4), layout="constrained")
+        ax_shfx.plot(t / 3600, forcing.w_th_s(t))
+        ax_shfx.set_xlabel("Time (hours)")
+        ax_shfx.set_ylabel("Surface Sensible Heat Flux (K m/s)")
+        ax_lhfx.plot(t / 3600, forcing.w_q_s(t))
+        ax_lhfx.set_xlabel("Time (hours)")
+        ax_lhfx.set_ylabel("Surface Latent Heat Flux (m/s)")
+        fig.show()
+
+    return grid, init, forcing
+
+
 if __name__ == "__main__":
-    get_gabls1(plot=True)
+    # get_gabls1(plot=True)
     # get_ekman(plot=True)
     # get_ysu(plot=True, debug_dt=0 * 60)
+    get_wangara(plot=True)

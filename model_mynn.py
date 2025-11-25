@@ -166,9 +166,10 @@ def simulate(
     dt_s: float,
     t_end_s: float,
     dt_out_s: float,
+    t_start_s: float = 0.0,
 ) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult, jnp.ndarray]:
     # Setup time arrays
-    t_outer = jnp.arange(0, t_end_s, dt_out_s)
+    t_outer = jnp.arange(t_start_s, t_end_s, dt_out_s)
     rel_t_inner = jnp.arange(0, dt_out_s, dt_s)
     jax.debug.print(
         f"Inner steps: {len(rel_t_inner)}, "
@@ -310,20 +311,30 @@ if __name__ == "__main__":
     # grid, init, forcing = cases.get_ekman(Nz=100)
 
     # YSU test case
-    # t_debug = 33000 + 500
-    t_debug = 0
-    grid, init, forcing = cases.get_ysu(debug_dt=t_debug)
+    # t_debug = 0
+    # grid, init, forcing = cases.get_ysu(debug_dt=t_debug)
 
     # GABLS
     # grid, init, forcing = cases.get_gabls1(Nz=200)
 
+    # Wangara
+    grid, init, forcing = cases.get_wangara()
+
     # Init and run model
     sfc = SurfaceProperties(z0m=0.1, z0h=0.1, sim_funcs=BusingerDyerSimFuncs())
     model = init_model(grid, sfc, prescribe_sfc_heat="th_s" if forcing.w_th_s is None else "w_th_s")
-    state_hist, diag_hist, mo_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 12, dt_out_s=60 * 5)
+    state_hist, diag_hist, mo_hist, t = simulate(
+        model,
+        init,
+        forcing,
+        dt_s=0.1,
+        t_start_s=9 * 60 * 60,
+        t_end_s=16 * 60 * 60,
+        dt_out_s=60 * 5,
+    )
 
     # Save output
-    ds = make_dataset(state_hist, diag_hist, mo_hist, time=t, grid=grid)
+    ds = make_dataset(state_hist, diag_hist, mo_hist, time=t / 3600, grid=grid)
     ds.to_netcdf("out.nc")
     print("Written to disk.")
 
