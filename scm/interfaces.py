@@ -125,7 +125,7 @@ DiagVarsT = TypeVar("DiagVarsT", bound=DiagVars)
 
 
 class ModelFn(Protocol):
-    def __call__(self, state: ProgVarsT, **kwargs) -> Tuple[ProgVarsT, DiagVarsT]:
+    def __call__(self, state: ProgVarsT, **kwargs) -> Tuple[ProgVarsT, DiagVarsT, MOResult]:
         """Compute tendencies, i.e., right-hand side of ODEs."""
 
 

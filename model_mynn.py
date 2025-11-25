@@ -40,13 +40,24 @@ class SurfaceProperties:
         return self.z0m / self.z0h
 
 
-def d_dz(a: jnp.ndarray, dz: float, bot: jnp.ndarray | float, top: jnp.ndarray | float) -> jnp.ndarray:
-    """Compute vertical gradient of a at half levels using first-order finite differences.
-    todo: improve padding to repeat edge values instead of zeros
-    """
+def d_dz(a: jnp.ndarray, dz: float, bot: jnp.ndarray | float | str, top: jnp.ndarray | float | str) -> jnp.ndarray:
+    """Compute vertical gradient of a at half levels using first-order finite differences."""
     Nz = len(a)
     da_dz = jnp.zeros(Nz + 1)  # half levels
     da_dz = da_dz.at[1:-1].set((a[1:] - a[:-1]) / dz)
+
+    if isinstance(bot, str):
+        if bot == "edge":
+            bot = da_dz[1]
+        else:
+            raise ValueError(f"Unknown bot BC string: {bot}")
+
+    if isinstance(top, str):
+        if top == "edge":
+            top = da_dz[-2]
+        else:
+            raise ValueError(f"Unknown top BC string: {top}")
+
     da_dz = da_dz.at[0].set(bot)
     da_dz = da_dz.at[-1].set(top)
     return da_dz
@@ -69,7 +80,7 @@ def init_model(grid: StaggeredGrid, sfc: SurfaceProperties) -> ModelFn:
     closure_fn = init_mynn(grid=grid)
 
     @jax.jit
-    def _model(state: ProgVarsMYNN, forcing: StaticForcing) -> Tuple[ProgVarsMYNN, DiagVarsMYNN]:
+    def _model(state: ProgVarsMYNN, forcing: StaticForcing) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
         # Unpack state
         u, v, thv, q_sq = state.u, state.v, state.thv, state.q_sq
         th = thv  # todo: proper conversion
@@ -88,10 +99,10 @@ def init_model(grid: StaggeredGrid, sfc: SurfaceProperties) -> ModelFn:
         w_thv_s = mo_res.w_th
 
         # Compute vertical gradients of state for fluxes (half levels, 1st order finite differences)
-        du_dz = d_dz(u, dz=grid.dz, bot=mo_res.du_dz, top=0.0)
-        dv_dz = d_dz(v, dz=grid.dz, bot=mo_res.dv_dz, top=0.0)
-        dthv_dz = d_dz(thv, dz=grid.dz, bot=dthv_dz_s, top=dthv_dz_top)
-        dqsq_dz = d_dz(q_sq, dz=grid.dz, bot=0.0, top=0.0)  # todo: lower BC = 0 ok?
+        du_dz = d_dz(u, dz=grid.dz, bot="edge", top=0.0)
+        dv_dz = d_dz(v, dz=grid.dz, bot="edge", top=0.0)
+        dthv_dz = d_dz(thv, dz=grid.dz, bot="edge", top=dthv_dz_top)
+        dqsq_dz = d_dz(q_sq, dz=grid.dz, bot="edge", top=0.0)  # todo: lower BC = 0 ok?
         grads = ProgVarsMYNN(u=du_dz, v=dv_dz, thv=dthv_dz, q_sq=dqsq_dz)
 
         # PBL scheme on half levels
@@ -120,7 +131,7 @@ def init_model(grid: StaggeredGrid, sfc: SurfaceProperties) -> ModelFn:
         # Gather tendencies and updated diagnostics
         tends = ProgVarsMYNN(u=u_tend, v=v_tend, thv=thv_tends, q_sq=q_sq_tend)
         diag = update_dc_obj(diag, u_w=u_w, v_w=v_w, thv_w=thv_w)
-        return tends, diag
+        return tends, diag, mo_res
 
     return _model
 
@@ -134,16 +145,16 @@ def update_dc_obj(d: T, **updates) -> T:
 
 def init_time_stepper(model: ModelFn, dt: float) -> ModelFn:
     @jax.jit
-    def _euler(state: ProgVarsMYNN, **kwargs) -> Tuple[ProgVarsMYNN, DiagVarsMYNN]:
+    def _euler(state: ProgVarsMYNN, **kwargs) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
         """Euler integration"""
-        tends, diag = model(state, **kwargs)
+        tends, diag, mo_res = model(state, **kwargs)
         state_next = ProgVarsMYNN(
             u=state.u + dt * tends.u,
             v=state.v + dt * tends.v,
             thv=state.thv + dt * tends.thv,
-            q_sq=jnp.clip(state.q_sq + dt * tends.q_sq, min=0),
+            q_sq=jnp.clip(state.q_sq + dt * tends.q_sq, min=1e-16),  # todo: I clip at beginning of closure. Why needd?
         )
-        return state_next, diag
+        return state_next, diag, mo_res
 
     return _euler
 
@@ -155,7 +166,7 @@ def simulate(
     dt_s: float,
     t_end_s: float,
     dt_out_s: float,
-) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, jnp.ndarray]:
+) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult, jnp.ndarray]:
     # Setup time arrays
     t_outer = jnp.arange(0, t_end_s, dt_out_s)
     rel_t_inner = jnp.arange(0, dt_out_s, dt_s)
@@ -174,25 +185,25 @@ def simulate(
     @jax.jit
     def _scan_inner(carry, t):
         """Advance model by one step but don't accumulate outputs"""
-        (state, _) = carry
-        state_next, diag_next = model_stepper(state, forcing=get_forcing(t))
+        (state, _, _) = carry
+        state_next, diag_next, mo_next = model_stepper(state, forcing=get_forcing(t))
         # jax.debug.print("{t}", t=t)
-        return (state_next, diag_next), None
+        return (state_next, diag_next, mo_next), None
 
     @jax.jit
     def _scan_outer(carry, t):
         """Advance model by inner steps and accumulate outputs"""
-        (state, _) = carry
-        (state_next, diag_next), _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
+        (state, _, _) = carry
+        (state_next, diag_next, mo_next), _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
         jax.debug.print("t={t} ({frac_done:.2f}%)", t=t + dt_out_s, frac_done=100 * (t + dt_out_s) / t_end_s)
-        return (state_next, diag_next), (state_next, diag_next)
+        return (state_next, diag_next, mo_next), (state_next, diag_next, mo_next)
 
     # Perform one step to get init DiagVars object, which we can use to initialize the scan
-    _, diag_init = model(ic, forcing=get_forcing(jnp.array(0.0)))
+    _, diag_init, mo_init = model(ic, forcing=get_forcing(jnp.array(0.0)))
 
     jax.debug.print("Begin simulation...")
-    _, (state_hist, diag_hist) = jax.lax.scan(_scan_outer, init=(ic, diag_init), xs=t_outer)
-    return state_hist, diag_hist, t_outer
+    _, (state_hist, diag_hist, mo_hist) = jax.lax.scan(_scan_outer, init=(ic, diag_init, mo_init), xs=t_outer)
+    return state_hist, diag_hist, mo_hist, t_outer
 
 
 def plot_state(state: ProgVarsMYNN, grid: StaggeredGrid):
@@ -298,29 +309,35 @@ if __name__ == "__main__":
     # Ekman spiral
     # grid, init, forcing = cases.get_ekman(Nz=100)
 
-    # YSU test case
-    grid, init, forcing = cases.get_ysu()
-    init = ProgVarsMYNN(
-        u=init.u,
-        v=init.v,
-        thv=init.th,
-        q_sq=jnp.ones(grid.Nz) * 0.01,
-    )
-    # init = init_from_xr("out_debug.nc", t=5947)
+    # # YSU test case
+    # # t_debug = 33000 + 500
+    # t_debug = 0
+    # grid, init, forcing = cases.get_ysu(debug_dt=t_debug)
+    # init = ProgVarsMYNN(
+    #     u=init.u,
+    #     v=init.v,
+    #     thv=init.th,
+    #     q_sq=jnp.ones(grid.Nz) * 0.01,
+    # )
+    # # init = init_from_xr("out_debug.nc", t=t_debug)
+
+    # GABLS
+    grid, init, forcing = cases.get_gabls1()
     sfc = SurfaceProperties(z0m=0.1, z0h=0.1, sim_funcs=BusingerDyerSimFuncs(), prescribe="w_th_s")
 
     # Init and run model
     model = init_model(grid, sfc)
-    state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 10.5, dt_out_s=60 * 10)
-    # state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=1, t_end_s=60 * 60 * 5, dt_out_s=60, ode_int="euler")
+    # state_hist, diag_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 10, dt_out_s=0.1)
+    state_hist, diag_hist, mo_hist, t = simulate(model, init, forcing, dt_s=0.1, t_end_s=60 * 60 * 9, dt_out_s=60 * 5)
 
     # Save output
-    ds = make_dataset(state_hist, diag_hist, time=t, grid=grid)
+    ds = make_dataset(state_hist, diag_hist, mo_hist, time=t, grid=grid)
     ds.to_netcdf("out.nc")
+    print("Written to disk.")
 
     # Unstack for plotting
-    state_hist = unstack_hist(state_hist)
-    diag_hist = unstack_hist(diag_hist)
-
-    plot_hist(state_hist, t, grid, plot_sfc_val=True)
-    plot_hist(diag_hist, t, grid, plot_sfc_val=True)
+    # state_hist = unstack_hist(state_hist)
+    # diag_hist = unstack_hist(diag_hist)
+    #
+    # plot_hist(state_hist, t, grid, plot_sfc_val=True)
+    # plot_hist(diag_hist, t, grid, plot_sfc_val=True)
