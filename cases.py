@@ -259,7 +259,7 @@ def get_wangara(Nz: int = 50, plot: bool = False) -> Tuple[StaggeredGrid, ProgVa
     )
 
     ## Initial conditions from observations
-    df = pd.read_csv("references/wangara/input.dat", sep="\t", names=["u", "v", "th"])
+    df = pd.read_csv("data/wangara/input.dat", sep="\t", names=["u", "v", "th"])
     df["z"] = jnp.linspace(0, 2000, len(df))
 
     init = ProgVarsMYNN(
