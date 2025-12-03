@@ -1,0 +1,5 @@
+outs:
+- md5: 8dbe9c33065924c2e54fb6eb9e30df6b
+  size: 1064779
+  hash: md5
+  path: CERRA_files.txt.gz
