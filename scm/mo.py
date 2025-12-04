@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import functools
 import logging
-from typing import Callable, Tuple, Literal
+from typing import Callable, Tuple, Literal, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +34,19 @@ class MOResult:
     th_s: jnp.ndarray  # Surface temperature
     u_w: jnp.ndarray  # Surface u-w stress
     v_w: jnp.ndarray  # Surface v-w stress
+
+
+class MOFunc(Protocol):
+    def __call__(
+        self,
+        *,
+        u_0: jnp.ndarray | float,
+        v_0: jnp.ndarray | float,
+        th_0: jnp.ndarray | float,
+        w_q_s: jnp.ndarray | float,
+        w_th_s: jnp.ndarray | float | None = None,
+        th_s: jnp.ndarray | float | None = None,
+    ) -> MOResult: ...
 
 
 class MOSimilarityFuncs(abc.ABC):
@@ -136,7 +148,7 @@ def init_mo_sfc(
     sim_funcs: MOSimilarityFuncs,
     prescribe: Literal["w_th_s", "th_s"],
     n_iter: int = 10,
-) -> Callable:
+) -> MOFunc:
     """Create a Monin-Obukhov similarity model for surface fluxes.
 
     Parameters

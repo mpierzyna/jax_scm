@@ -9,9 +9,9 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 import cases
-from scm.closures.mynn import init_mynn, ProgVarsMYNN, DiagVarsMYNN
+from scm.closures.mynn import init_mynn, ProgVarsMYNN, DiagVarsMYNN, ModelFn
 from scm.grid import StaggeredGrid
-from scm.interfaces import StaticForcing, ModelFn, ClosureFn, TransientForcing
+from scm.interfaces import StaticForcing, TransientForcing
 from scm.mo import MOSimilarityFuncs, init_mo_sfc, MOResult, BusingerDyerSimFuncs
 from scm.utils import make_dataset
 
@@ -143,22 +143,6 @@ def update_dc_obj(d: T, **updates) -> T:
     return d.__class__(**d_dict)
 
 
-def init_time_stepper(model: ModelFn, dt: float) -> ModelFn:
-    @jax.jit
-    def _euler(state: ProgVarsMYNN, **kwargs) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
-        """Euler integration"""
-        tends, diag, mo_res = model(state, **kwargs)
-        state_next = ProgVarsMYNN(
-            u=state.u + dt * tends.u,
-            v=state.v + dt * tends.v,
-            thv=state.thv + dt * tends.thv,
-            q_sq=jnp.clip(state.q_sq + dt * tends.q_sq, min=1e-16),  # todo: I clip at beginning of closure. Why needd?
-        )
-        return state_next, diag, mo_res
-
-    return _euler
-
-
 def simulate(
     model: ModelFn,
     ic: ProgVarsMYNN,
@@ -168,17 +152,42 @@ def simulate(
     dt_out_s: float,
     t_start_s: float = 0.0,
 ) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult, jnp.ndarray]:
-    # Setup time arrays
+    # Setup time integration
+    Q_SQ_MIN = 1e-10  # clipping to avoid negative TKE
+
+    @jax.jit
+    def _euler(y0: ProgVarsMYNN, **kwargs):
+        """Euler integration. y0 is model state, dydt0 are ODE tendencies"""
+        dydt0, diag0, mo_res0 = model(y0, **kwargs)
+        y1 = ProgVarsMYNN(
+            u=y0.u + dt_s * dydt0.u,
+            v=y0.v + dt_s * dydt0.v,
+            thv=y0.thv + dt_s * dydt0.thv,
+            q_sq=jnp.clip(y0.q_sq + dt_s * dydt0.q_sq, min=Q_SQ_MIN),
+        )
+        return y1, dydt0, diag0, mo_res0
+
+    @jax.jit
+    def _ab2(y1: ProgVarsMYNN, dydt0: ProgVarsMYNN, **kwargs):
+        """Two-step Adams-Bashforth integration. y1 is state (i-1), dydt0 are tendencies (i-2)."""
+        dydt1, diag1, mo_res1 = model(y1, **kwargs)
+        y2 = ProgVarsMYNN(
+            u=y1.u + (3 / 2) * dt_s * dydt1.u - (1 / 2) * dt_s * dydt0.u,
+            v=y1.v + (3 / 2) * dt_s * dydt1.v - (1 / 2) * dt_s * dydt0.v,
+            thv=y1.thv + (3 / 2) * dt_s * dydt1.thv - (1 / 2) * dt_s * dydt0.thv,
+            q_sq=jnp.clip(y1.q_sq + (3 / 2) * dt_s * dydt1.q_sq - (1 / 2) * dt_s * dydt0.q_sq, min=Q_SQ_MIN),
+        )
+        return y2, dydt1, diag1, mo_res1
+
+    # Setup timestep arrays
+    # Inner steps shifted by dt because initial Euler step is taken outside loop
     t_outer = jnp.arange(t_start_s, t_end_s, dt_out_s)
-    rel_t_inner = jnp.arange(0, dt_out_s, dt_s)
+    rel_t_inner = jnp.arange(0, dt_out_s, dt_s) + dt_s  # relative to outer step
     jax.debug.print(
         f"Inner steps: {len(rel_t_inner)}, "
         f"Outer steps: {len(t_outer)}, "
         f"Total steps: {len(t_outer) * len(rel_t_inner)}"
     )
-
-    # Create time stepper
-    model_stepper = init_time_stepper(model, dt=dt_s)
 
     # Create forcing evaluation function
     get_forcing = forcing.get_eval_fn()
@@ -186,25 +195,22 @@ def simulate(
     @jax.jit
     def _scan_inner(carry, t):
         """Advance model by one step but don't accumulate outputs"""
-        (state, _, _) = carry
-        state_next, diag_next, mo_next = model_stepper(state, forcing=get_forcing(t))
-        # jax.debug.print("{t}", t=t)
-        return (state_next, diag_next, mo_next), None
+        y1, dydt0, _, _ = carry
+        y2, dydt1, diag1, mo_res1 = _ab2(y1, dydt0, forcing=get_forcing(t))
+        return (y2, dydt1, diag1, mo_res1), None
 
     @jax.jit
     def _scan_outer(carry, t):
         """Advance model by inner steps and accumulate outputs"""
-        (state, _, _) = carry
-        (state_next, diag_next, mo_next), _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
+        carry_new, _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
         jax.debug.print("t={t} ({frac_done:.2f}%)", t=t + dt_out_s, frac_done=100 * (t + dt_out_s) / t_end_s)
-        return (state_next, diag_next, mo_next), (state_next, diag_next, mo_next)
-
-    # Perform one step to get init DiagVars object, which we can use to initialize the scan
-    _, diag_init, mo_init = model(ic, forcing=get_forcing(jnp.array(0.0)))
+        return carry_new, carry_new
 
     jax.debug.print("Begin simulation...")
-    _, (state_hist, diag_hist, mo_hist) = jax.lax.scan(_scan_outer, init=(ic, diag_init, mo_init), xs=t_outer)
-    return state_hist, diag_hist, mo_hist, t_outer
+    y0 = ic
+    y1, dydt0, diag0, mo_res0 = _euler(y0, forcing=get_forcing(t_outer[0]))  # Warmup: one Euler step
+    _, (y_hist, _, diag_hist, mo_hist) = jax.lax.scan(_scan_outer, init=(y1, dydt0, diag0, mo_res0), xs=t_outer)
+    return y_hist, diag_hist, mo_hist, t_outer
 
 
 def plot_state(state: ProgVarsMYNN, grid: StaggeredGrid):
@@ -327,7 +333,7 @@ if __name__ == "__main__":
         model,
         init,
         forcing,
-        dt_s=0.1,
+        dt_s=0.5,
         t_start_s=9 * 60 * 60,
         t_end_s=16 * 60 * 60,
         dt_out_s=60 * 5,

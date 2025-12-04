@@ -1,5 +1,6 @@
+from __future__ import annotations
 import dataclasses
-from typing import Protocol
+from typing import Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -7,6 +8,11 @@ import jax.numpy as jnp
 from scm import consts
 from scm.grid import StaggeredGrid
 from scm.mo import MOResult
+
+
+class ModelFn(Protocol):
+    def __call__(self, state: ProgVarsMYNN, **kwargs) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
+        """Compute tendencies, i.e., right-hand side of ODEs."""
 
 
 @jax.tree_util.register_dataclass
