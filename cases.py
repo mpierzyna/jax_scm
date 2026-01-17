@@ -10,7 +10,7 @@ from scm.interfaces import TransientForcing, Simulation
 from scm.closures.mynn import ProgVarsMYNN
 
 
-def get_gabls1(Nz: int = 128, plot: bool = False, random_seed: int = 0) -> Simulation:
+def get_gabls1(Nz: int = 128, plot: bool = False, random_seed: int = 0) -> Simulation[ProgVarsMYNN]:
     ## Grid
     grid = StaggeredGrid(H=400, Nz=Nz)
     z_inv = 100
@@ -95,7 +95,7 @@ def get_gabls1(Nz: int = 128, plot: bool = False, random_seed: int = 0) -> Simul
     return Simulation(name="GABLS1", grid=grid, init=init, forcing=forcing, t_start_s=0, t_end_s=9 * 60 * 60)
 
 
-def get_ysu(Nz: int = 138, plot: bool = False) -> Simulation:
+def get_ysu(Nz: int = 138, plot: bool = False) -> Simulation[ProgVarsMYNN]:
     """Initial conditions and forcing from HND06
 
     Use debug_dt to shift the time of the forcing functions for debugging purposes.
@@ -186,7 +186,7 @@ def get_ysu(Nz: int = 138, plot: bool = False) -> Simulation:
     return Simulation(name="YSU", grid=grid, init=init, forcing=forcing, t_start_s=0, t_end_s=12 * 3600)
 
 
-def get_ekman(Nz: int = 100, plot: bool = False):
+def get_ekman(Nz: int = 100, plot: bool = False) -> Simulation[ProgVarsMYNN]:
     """Ekman spiral initial conditions and forcing."""
     grid = StaggeredGrid(H=1000, Nz=Nz)
 
@@ -222,10 +222,17 @@ def get_ekman(Nz: int = 100, plot: bool = False):
         ax_th.set_xlabel("Potential Temperature (K)")
         fig.show()
 
-    return grid, init, forcing
+    return Simulation(
+        name="Ekman",
+        grid=grid,
+        init=init,
+        forcing=forcing,
+        t_start_s=0,
+        t_end_s=12 * 3600,
+    )
 
 
-def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation:
+def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation[ProgVarsMYNN]:
     """Wangara initial conditions and forcing."""
     import pandas as pd
 

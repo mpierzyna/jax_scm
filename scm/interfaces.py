@@ -4,22 +4,24 @@ Specific interfaces for each model (containing extra variables) should be define
 
 from __future__ import annotations
 
-from typing import Protocol, Tuple, Self, TypeVar, Callable
+from typing import Protocol, Tuple, Self, TypeVar, Callable, Generic
 import dataclasses
 import jax.numpy as jnp
 import jax.tree_util
 
-from scm.closures.mynn import ProgVarsMYNN
 from scm.grid import StaggeredGrid
-
 from scm.mo import MOResult
 
 
+ProgVarsT = TypeVar("ProgVarsT")
+DiagVarsT = TypeVar("DiagVarsT")
+
+
 @dataclasses.dataclass
-class Simulation:
+class Simulation(Generic[ProgVarsT]):
     name: str
     grid: StaggeredGrid
-    init: ProgVarsMYNN
+    init: ProgVarsT
     forcing: TransientForcing
     t_start_s: int
     t_end_s: int
@@ -132,16 +134,14 @@ class TransientForcing:
         return _eval_fn
 
 
-ProgVarsT = TypeVar("ProgVarsT", bound=ProgVars)
-DiagVarsT = TypeVar("DiagVarsT", bound=DiagVars)
 
 
-class ModelFn(Protocol):
+class ModelFn(Protocol[ProgVarsT, DiagVarsT]):
     def __call__(self, state: ProgVarsT, **kwargs) -> Tuple[ProgVarsT, DiagVarsT, MOResult]:
         """Compute tendencies, i.e., right-hand side of ODEs."""
 
 
-class ClosureFn(Protocol):
+class ClosureFn(Protocol[ProgVarsT, DiagVarsT]):
     def __call__(self, state: ProgVarsT, grads: ProgVarsT, mo_res: MOResult) -> DiagVarsT:
         """Compute closure terms for prognostic variables."""
 

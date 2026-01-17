@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import time
 from typing import Tuple, Callable
+import dataclasses
 
 import jax
 from jax import numpy as jnp
 
-from scm.closures.mynn import ModelFn, ProgVarsMYNN, DiagVarsMYNN
-from scm.interfaces import Simulation
+from scm.closures.mynn import ModelFn
+from scm.interfaces import Simulation, ProgVarsT, DiagVarsT
 from scm.mo import MOResult
 
 Q_SQ_MIN = 1e-10  # clipping to avoid negative TKE
@@ -58,15 +59,12 @@ def get_euler_step_fn(model: ModelFn) -> Callable:
     """Euler integrator factory."""
 
     @jax.jit
-    def _euler(dt_s: float, y0: ProgVarsMYNN, **kwargs):
+    def _euler(dt_s: float, y0, **kwargs):
         """Euler integration. y0 is model state, dydt0 are ODE tendencies"""
         dydt0, diag0, mo_res0 = model(y0, **kwargs)
-        y1 = ProgVarsMYNN(
-            u=y0.u + dt_s * dydt0.u,
-            v=y0.v + dt_s * dydt0.v,
-            thv=y0.thv + dt_s * dydt0.thv,
-            q_sq=jnp.clip(y0.q_sq + dt_s * dydt0.q_sq, min=Q_SQ_MIN),
-        )
+        y1 = jax.tree_util.tree_map(lambda y, dy: y + dt_s * dy, y0, dydt0)
+        if hasattr(y1, "q_sq"):
+            y1 = dataclasses.replace(y1, q_sq=jnp.clip(y1.q_sq, min=Q_SQ_MIN))
         return y1, dydt0, diag0, mo_res0
 
     return _euler
@@ -76,15 +74,13 @@ def get_ab2_step_fn(model: ModelFn) -> Callable:
     """Two-step Adams-Bashforth integrator factory."""
 
     @jax.jit
-    def _ab2(dt_s: float, y1: ProgVarsMYNN, dydt0: ProgVarsMYNN, **kwargs):
+    def _ab2(dt_s: float, y1, dydt0, **kwargs):
         """Two-step Adams-Bashforth integration. y1 is state (i-1), dydt0 are tendencies (i-2)."""
         dydt1, diag1, mo_res1 = model(y1, **kwargs)
-        y2 = ProgVarsMYNN(
-            u=y1.u + (3 / 2) * dt_s * dydt1.u - (1 / 2) * dt_s * dydt0.u,
-            v=y1.v + (3 / 2) * dt_s * dydt1.v - (1 / 2) * dt_s * dydt0.v,
-            thv=y1.thv + (3 / 2) * dt_s * dydt1.thv - (1 / 2) * dt_s * dydt0.thv,
-            q_sq=jnp.clip(y1.q_sq + (3 / 2) * dt_s * dydt1.q_sq - (1 / 2) * dt_s * dydt0.q_sq, min=Q_SQ_MIN),
-        )
+        dydt_ab = jax.tree_util.tree_map(lambda d1, d0: (3 / 2) * d1 - (1 / 2) * d0, dydt1, dydt0)
+        y2 = jax.tree_util.tree_map(lambda y, dy: y + dt_s * dy, y1, dydt_ab)
+        if hasattr(y2, "q_sq"):
+            y2 = dataclasses.replace(y2, q_sq=jnp.clip(y2.q_sq, min=Q_SQ_MIN))
         return y2, dydt1, diag1, mo_res1
 
     return _ab2
@@ -95,7 +91,7 @@ def simulate(
     sim: Simulation,
     dt_s: float,
     dt_s_out: float,
-) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult, jnp.ndarray]:
+) -> Tuple[ProgVarsT, DiagVarsT, MOResult, jnp.ndarray]:
     """Simulate model with AB2 and constant timestep."""
     # Setup time integration
     _euler = get_euler_step_fn(model)
@@ -145,7 +141,7 @@ def simulate_adaptive_dt(
     dt_s_init: float,
     dt_s_max: float,
     dt_s_out: float,
-) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult, jnp.ndarray]:
+) -> Tuple[ProgVarsT, DiagVarsT, MOResult, jnp.ndarray]:
     """Simulate model with AB2 and adaptive time stepping based on CFL condition for diffusion."""
     # Setup time integration
     _euler = get_euler_step_fn(model)
