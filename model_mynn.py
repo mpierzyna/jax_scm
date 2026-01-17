@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from typing import Tuple, List, Literal, TypeVar
+from typing import Tuple, Literal, TypeVar
 
 import jax
 import jax.experimental.checkify
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 
 import cases
-from scm.closures.mynn import init_mynn, ProgVarsMYNN, DiagVarsMYNN, ModelFn
+from scm.closures.mynn import init_mynn, ProgVarsMYNN, DiagVarsMYNN
+from scm.grad import d_dz
 from scm.grid import StaggeredGrid
+from scm.interfaces import ModelFn
 from scm.interfaces import StaticForcing
 from scm.mo import init_mo_sfc, MOResult, BusingerDyerSimFuncs, SurfaceProperties
 from scm.time_stepping import simulate_adaptive_dt
@@ -28,28 +29,11 @@ logger = logging.getLogger("scm")
 T = TypeVar("T")
 
 
-def d_dz(a: jnp.ndarray, dz: float, bot: jnp.ndarray | float | str, top: jnp.ndarray | float | str) -> jnp.ndarray:
-    """Compute vertical gradient of a at half levels using first-order finite differences."""
-    da_dz_inner = (a[1:] - a[:-1]) / dz
-
-    if bot == "edge":
-        bot_val = da_dz_inner[0]
-    else:
-        bot_val = bot
-
-    if top == "edge":
-        top_val = da_dz_inner[-1]
-    else:
-        top_val = top
-
-    return jnp.concatenate([jnp.atleast_1d(bot_val), da_dz_inner, jnp.atleast_1d(top_val)])
-
-
 def init_model(
     grid: StaggeredGrid,
     sfc: SurfaceProperties,
     prescribe_sfc_heat: Literal["w_th_s", "th_s"],
-) -> ModelFn:
+) -> ModelFn[ProgVarsMYNN, DiagVarsMYNN]:
     # Create MO model
     z_mo = float(grid.z[0])
     eval_mo = init_mo_sfc(
@@ -117,90 +101,6 @@ def init_model(
         return tends, diag, mo_res
 
     return _model
-
-
-def plot_state(state: ProgVarsMYNN, grid: StaggeredGrid):
-    """Plot initial conditions."""
-    fig, (ax_uv, ax_thv, ax_q_sq) = plt.subplots(ncols=3, figsize=(8, 3), constrained_layout=True)
-    ax_uv.plot(state.u, grid.z)
-    ax_uv.plot(state.v, grid.z)
-    ax_thv.plot(state.thv, grid.z)
-    ax_q_sq.plot(state.q_sq, grid.z)
-    fig.show()
-
-
-def plot_hist(hist: List, t: jnp.ndarray, grid: StaggeredGrid, plot_sfc_val: bool, cmap: str = "viridis"):
-    """Plot history of diagnostics."""
-
-    def _plot_profiles(keys):
-        fig, axarr = plt.subplots(ncols=len(keys), figsize=(len(keys) * 1.5, 3), sharey="all", constrained_layout=True)
-        colors = plt.get_cmap(cmap)(jnp.linspace(0, 1, len(hist)))
-        for item, c in zip(hist, colors):
-            for ax, k in zip(axarr, keys):
-                vals = getattr(item, k)
-                z = grid.z if len(vals) == grid.Nz else grid.zh
-                if not plot_sfc_val:
-                    vals = vals[1:]
-                    z = z[1:]
-                ax.plot(vals, z, color=c)
-
-        for ax, k in zip(axarr, keys):
-            ax.set_xlabel(k)
-            ax.margins(y=0)
-        axarr[0].set_ylabel("Height (m)")
-
-        fig.show()
-
-    hist_dict = dataclasses.asdict(hist[0])
-    keys_profile = []
-    keys_ts = []
-    for k, v in hist_dict.items():
-        if v.ndim == 1:
-            keys_profile.append(k)
-        elif v.ndim == 0:
-            keys_ts.append(k)
-        else:
-            raise ValueError(f"Unexpected dimension for key '{k}': {v.ndim}")
-
-    if keys_profile:
-        _plot_profiles(keys_profile)
-    if keys_ts:
-        plot_sfc_hist(hist, t=t, keys=keys_ts)
-
-
-def plot_sfc_hist(hist: List[DiagVarsMYNN | ProgVarsMYNN], t: jnp.ndarray, keys: List[str] = None):
-    """Plot history of diagnostics at surface."""
-    if keys is None:
-        keys = list(dataclasses.asdict(hist[0]).keys())
-
-    sfc_vals = {k: [] for k in keys}
-    for item in hist:
-        for k in keys:
-            v = getattr(item, k)
-            if v.ndim == 0:  # Single value
-                sfc_vals[k].append(v)
-            elif v.ndim == 1:  # Profile
-                sfc_vals[k].append(v[0])  # Take the first value (surface value)
-            else:
-                raise ValueError(f"Unexpected dimension for key '{k}': {v.ndim}")
-
-    fig, axarr = plt.subplots(nrows=len(keys), figsize=(5, len(keys) * 1), sharex="all", constrained_layout=True)
-    if len(keys) == 1:
-        axarr = [axarr]  # Make it iterable
-    for ax, k in zip(axarr, keys):
-        ax.plot(t, sfc_vals[k])
-        ax.set_xlabel("Time, s")
-        ax.set_ylabel(k)
-        ax.margins(x=0)
-
-    fig.show()
-
-
-def unstack_hist(v: T) -> List[T]:
-    v_dict = dataclasses.asdict(v)
-    v_class = v.__class__
-    n, _ = v_dict[next(iter(v_dict))].shape  # Get number of time steps
-    return [v_class(**{k: v_dict[k][i] for k in v_dict}) for i in range(n)]
 
 
 def init_from_xr(f: str, t: float) -> ProgVarsMYNN:

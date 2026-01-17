@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import dataclasses
 import time
 from typing import Tuple, Callable
-import dataclasses
 
 import jax
 from jax import numpy as jnp
 
-from scm.closures.mynn import ModelFn
-from scm.interfaces import Simulation, ProgVarsT, DiagVarsT
+from scm.interfaces import Simulation, ProgVarsT, DiagVarsT, ModelFn
 from scm.mo import MOResult
 
 Q_SQ_MIN = 1e-10  # clipping to avoid negative TKE

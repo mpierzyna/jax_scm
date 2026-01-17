@@ -6,13 +6,13 @@ import xarray as xr
 from jax import numpy as jnp
 
 from scm.grid import StaggeredGrid
-from scm.interfaces import ProgVars, DiagVars
+from scm.interfaces import ProgVarsT, DiagVarsT
 from scm.mo import MOResult
 
 
 def make_dataset(
-    state_hist: ProgVars,
-    diag_hist: DiagVars,
+    state_hist: ProgVarsT,
+    diag_hist: DiagVarsT,
     mo_hist: MOResult,
     time: jnp.ndarray,
     grid: StaggeredGrid,

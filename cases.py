@@ -1,13 +1,11 @@
-from typing import Tuple, Dict
-
 import jax.numpy as jnp
 import jax.random
 import matplotlib.pyplot as plt
 
 from scm import consts
+from scm.closures.mynn import ProgVarsMYNN
 from scm.grid import StaggeredGrid
 from scm.interfaces import TransientForcing, Simulation
-from scm.closures.mynn import ProgVarsMYNN
 
 
 def get_gabls1(Nz: int = 128, plot: bool = False, random_seed: int = 0) -> Simulation[ProgVarsMYNN]:

@@ -1,18 +1,14 @@
 from __future__ import annotations
+
 import dataclasses
-from typing import Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
 
 from scm import consts
 from scm.grid import StaggeredGrid
+from scm.interfaces import ClosureFn
 from scm.mo import MOResult
-
-
-class ModelFn(Protocol):
-    def __call__(self, state: ProgVarsMYNN, **kwargs) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
-        """Compute tendencies, i.e., right-hand side of ODEs."""
 
 
 @jax.tree_util.register_dataclass
@@ -57,12 +53,7 @@ class DiagVarsMYNN:
     ct2: jnp.ndarray  # temperature structure function coefficient
 
 
-class MYNNClosureFn(Protocol):
-    def __call__(self, state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
-        """Compute closure terms for prognostic variables."""
-
-
-def init_mynn(grid: StaggeredGrid) -> MYNNClosureFn:
+def init_mynn(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
     """
     References
     ----------

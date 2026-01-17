@@ -4,69 +4,32 @@ Specific interfaces for each model (containing extra variables) should be define
 
 from __future__ import annotations
 
-from typing import Protocol, Tuple, Self, TypeVar, Callable, Generic
 import dataclasses
+from typing import Protocol, Tuple, TypeVar, Callable, Generic
+
 import jax.numpy as jnp
 import jax.tree_util
 
 from scm.grid import StaggeredGrid
 from scm.mo import MOResult
 
-
+# Placeholders for concrete implementations of ProgVars and DiagVars per closure scheme
 ProgVarsT = TypeVar("ProgVarsT")
 DiagVarsT = TypeVar("DiagVarsT")
 
 
 @dataclasses.dataclass
 class Simulation(Generic[ProgVarsT]):
+    """Simulation container.
+    For correct type hinting, return, e.g., `Simulation[ProgVarsMYNN]`
+    """
+
     name: str
     grid: StaggeredGrid
     init: ProgVarsT
     forcing: TransientForcing
     t_start_s: int
     t_end_s: int
-
-
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
-class ProgVars:
-    """Prognostic variables"""
-
-    u: jnp.ndarray
-    v: jnp.ndarray
-    th: jnp.ndarray
-    q: jnp.ndarray
-
-    def as_tensor(self) -> jnp.ndarray:
-        """Return as tensor where variables are stacked along the first dimension."""
-        return jnp.stack(dataclasses.astuple(self), axis=0)
-
-    @classmethod
-    def from_tensor(cls, tensor: jnp.ndarray) -> Self:
-        """Create ProgVars from a tensor where variables are stacked along the first dimension."""
-        return cls(*tensor)
-
-
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
-class DiagVars:
-    """Diagnosed variables, e.g., fluxes, gradients, etc.
-    todo: maybe rename to ClosureVars
-    """
-
-    u_w: jnp.ndarray  # Horizontal wind stress
-    v_w: jnp.ndarray  # Horizontal wind stress
-    w_th: jnp.ndarray  # Vertical heat flux
-    w_q: jnp.ndarray  # Vertical moisture flux
-
-    def as_tensor(self) -> jnp.ndarray:
-        """Return as tensor where variables are stacked along the first dimension."""
-        return jnp.stack(dataclasses.astuple(self), axis=0)
-
-    @classmethod
-    def from_tensor(cls, tensor: jnp.ndarray) -> Self:
-        """Create ProgVars from a tensor where variables are stacked along the first dimension."""
-        return cls(*tensor)
 
 
 @jax.tree_util.register_dataclass
@@ -132,8 +95,6 @@ class TransientForcing:
             )
 
         return _eval_fn
-
-
 
 
 class ModelFn(Protocol[ProgVarsT, DiagVarsT]):
