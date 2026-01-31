@@ -7,7 +7,8 @@ def xr_cache(tmp_path):
     return XRCache(cache_dir=tmp_path)
 
 
-def test_xr_cache(xr_cache):
+def test_argument_caching(xr_cache):
+    """If arguments are the same, cached result should be used."""
     call_count = 0
 
     @xr_cache.cache
@@ -38,3 +39,44 @@ def test_xr_cache(xr_cache):
     # Check that we have two files in the cache directory
     cached_files = list(xr_cache.cache_dir.glob("*.nc"))
     assert len(cached_files) == 2
+
+
+def test_fn_code_caching(xr_cache):
+    """If arguments are the same, but function body changed, cache should not be used."""
+    call_count = 0
+
+    @xr_cache.cache
+    def dummy_function(x):
+        nonlocal call_count
+        call_count += 1
+        import xarray as xr
+        import numpy as np
+
+        data = np.array([[x * 2]])
+        return xr.Dataset({"data": (("dim1", "dim2"), data)})
+
+    # First call should compute the result
+    ds1 = dummy_function(3)
+    assert call_count == 1
+    assert ds1["data"].values[0, 0] == 6
+
+    # Next call should come from cache
+    ds_cached = dummy_function(3)
+    assert call_count == 1  # No increment
+    assert ds_cached["data"].values[0, 0] == 6
+
+    # Redefine the function with a different body
+    @xr_cache.cache
+    def dummy_function(x):
+        nonlocal call_count
+        call_count += 1
+        import xarray as xr
+        import numpy as np
+
+        data = np.array([[x * 3]])  # Changed multiplier from 2 to 3
+        return xr.Dataset({"data": (("dim1", "dim2"), data)})
+
+    # Call the new function with same argument; should compute again due to code change
+    ds2 = dummy_function(3)
+    assert call_count == 2  # Incremented
+    assert ds2["data"].values[0, 0] == 9

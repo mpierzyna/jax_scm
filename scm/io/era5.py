@@ -60,5 +60,5 @@ if __name__ == "__main__":
     from scm.io.cache import XRCache
 
     logging.basicConfig(level="INFO")
-    xr_cache = XRCache(".cache_era5")
+    xr_cache = XRCache(".era5_cache")
     ds = xr_cache.cache(download_data)(52, 4, "2020-01-01")

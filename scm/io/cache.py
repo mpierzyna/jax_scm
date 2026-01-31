@@ -48,6 +48,7 @@ class XRCache:
             else:
                 logger.debug(f"Cache miss: {cache_file}. Computing and caching result.")
                 ds = fn(*args, **kwargs)
+                ds = ds.load()  # load here so data is available when returned
                 ds.to_netcdf(cache_file)
             return ds
 

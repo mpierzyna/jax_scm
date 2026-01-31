@@ -179,3 +179,4 @@ pyrightconfig.json
 
 /*.nc
 .idea
+.era5_cache

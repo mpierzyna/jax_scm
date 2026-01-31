@@ -17,6 +17,7 @@ from scm.interfaces import StaticForcing
 from scm.mo import init_mo_sfc, MOResult, BusingerDyerSimFuncs, SurfaceProperties
 from scm.time_stepping import simulate_adaptive_dt
 from scm.utils import make_dataset
+from scm.forcing.era5 import get_era5_sim
 
 # jax.config.update("jax_disable_jit", True)
 jax.config.update("jax_enable_x64", True)
@@ -130,7 +131,16 @@ if __name__ == "__main__":
     # sim = cases.get_gabls1(Nz=64)
 
     # Wangara
-    sim = cases.get_wangara(Nz=200)
+    # sim = cases.get_wangara(Nz=200)
+
+    # Cabauw from ERA5
+    sim = get_era5_sim(
+        name="Cabauw_Test",
+        lat_deg=52.0,
+        lon_deg=5.0,
+        grid=StaggeredGrid(Nz=100, H=3000.0),
+        time_slice="2025-07-01",
+    )
 
     # Init and run model
     sfc = SurfaceProperties(z0m=0.1, z0h=0.1, sim_funcs=BusingerDyerSimFuncs())
@@ -148,7 +158,7 @@ if __name__ == "__main__":
         model=model,
         sim=sim,
         dt_s_init=0.001,
-        dt_s_max=0.1,
+        dt_s_max=1,
         cfl_max=0.1,
         dt_s_out=60 * 5,
     )
