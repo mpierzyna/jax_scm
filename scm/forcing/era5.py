@@ -82,7 +82,7 @@ def get_era5_sim(
         u_geo=u_geo_fn,
         v_geo=v_geo_fn,
         th_s=t_s_fn,
-        w_q_s=lambda t_s: jnp.array(0.0),  # todo: need to figure out how to handle this
+        w_qv_s=lambda t_s: jnp.array(0.0),  # todo: need to figure out how to handle this
         f_c=float(7.2921e-5 * jnp.sin(jnp.deg2rad(lat_deg))),  # coriolis parameter
     )
 

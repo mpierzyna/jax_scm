@@ -27,7 +27,7 @@ def get_gabls1(Nz: int = 128, plot: bool = False, random_seed: int = 0) -> Simul
         v_geo=lambda t_s: vg,
         f_c=1.39e-4,  # 1/s, ~73 deg latitude
         th_s=th_s_fn,
-        w_q_s=lambda t_s: jnp.array(0.0),  # g/kg m/s
+        w_qv_s=lambda t_s: jnp.array(0.0),  # g/kg m/s
     )
 
     ## Initial conditions
@@ -152,7 +152,7 @@ def get_ysu(Nz: int = 138, plot: bool = False) -> Simulation[ProgVarsMYNN]:
         """Constant geostrophic wind."""
         return jnp.zeros(grid.Nz)
 
-    forcing = TransientForcing(u_geo=_u_geo, v_geo=_v_geo, f_c=1.39e-4, w_th_s=_shfx, w_q_s=_lhfx)
+    forcing = TransientForcing(u_geo=_u_geo, v_geo=_v_geo, f_c=1.39e-4, w_th_s=_shfx, w_qv_s=_lhfx)
 
     if plot:
         # Initial conditions
@@ -171,7 +171,7 @@ def get_ysu(Nz: int = 138, plot: bool = False) -> Simulation[ProgVarsMYNN]:
         # Forcing plots
         t_plot = jnp.linspace(0, 12 * 3600, 100)  # 0 to 12 hours
         shfx_plot = jax.vmap(forcing.w_th_s)(t_plot)
-        lhfx_plot = jax.vmap(forcing.w_q_s)(t_plot)
+        lhfx_plot = jax.vmap(forcing.w_qv_s)(t_plot)
         fig, (ax_shfx, ax_lhfx) = plt.subplots(ncols=2, figsize=(8, 4), layout="constrained")
         ax_shfx.plot(t_plot / 3600, shfx_plot * 1216)  # convert back to W/m2 for plotting
         ax_shfx.set_xlabel("Time (hours)")
@@ -196,7 +196,7 @@ def get_ekman(Nz: int = 100, plot: bool = False) -> Simulation[ProgVarsMYNN]:
         v_geo=lambda t: vg,
         f_c=1e-4,
         w_th_s=lambda t: jnp.array(0.0),  # neutral stratification
-        w_q_s=lambda t: jnp.array(0.0),
+        w_qv_s=lambda t: jnp.array(0.0),
     )
 
     thv = jnp.ones(grid.Nz) * 280.0
@@ -255,7 +255,7 @@ def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation[ProgVarsMYNN]:
         v_geo=lambda t_s: v_g,
         f_c=1.39e-4,
         w_th_s=w_thl_fn,
-        w_q_s=w_qw_fn,
+        w_qv_s=w_qw_fn,
         dth_dz_top=dthl_dz_top,
     )
 
@@ -266,8 +266,9 @@ def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation[ProgVarsMYNN]:
     init = ProgVarsMYNN(
         u=jnp.interp(grid.z, df["z"].values, df["u"].values),
         v=jnp.interp(grid.z, df["z"].values, df["v"].values),
-        thv=jnp.interp(grid.z, df["z"].values, df["th"].values),
+        thv=jnp.interp(grid.z, df["z"].values, df["th"].values),  # todo: is this virtual?
         q_sq=jnp.ones(grid.Nz) * 0.01,  # small initial TKE
+        qv=jnp.zeros(grid.Nz),  # todo: check if there is humidity data
     )
 
     if plot:
@@ -288,7 +289,7 @@ def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation[ProgVarsMYNN]:
         ax_shfx.plot(t / 3600, forcing.w_th_s(t))
         ax_shfx.set_xlabel("Time (hours)")
         ax_shfx.set_ylabel("Surface Sensible Heat Flux (K m/s)")
-        ax_lhfx.plot(t / 3600, forcing.w_q_s(t))
+        ax_lhfx.plot(t / 3600, forcing.w_qv_s(t))
         ax_lhfx.set_xlabel("Time (hours)")
         ax_lhfx.set_ylabel("Surface Latent Heat Flux (m/s)")
         fig.show()

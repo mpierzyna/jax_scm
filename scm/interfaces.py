@@ -51,7 +51,7 @@ class StaticForcing:
     th_s: jnp.ndarray | None = None  # Unit: (K); Shape: (1,)
 
     # Latent heat flux
-    w_q_s: jnp.ndarray | None = None  # Unit: (kg/kg m/s); Shape: (1,)
+    w_qv_s: jnp.ndarray | None = None  # Unit: (kg/kg m/s); Shape: (1,)
 
     # Capping inversion at domain top
     dth_dz_top: float = 0.01  # Unit: (K/m)
@@ -72,7 +72,7 @@ class TransientForcing:
     th_s: ForcingFn | None = None  # Unit: K, must return scalar
 
     # Latent heat flux
-    w_q_s: ForcingFn  # Unit: (kg/kg m/s); must return scalar
+    w_qv_s: ForcingFn  # Unit: (kg/kg m/s); must return scalar
 
     # Capping inversion at domain top
     dth_dz_top: float = 0.01  # Unit: (K/m)
@@ -92,7 +92,7 @@ class TransientForcing:
                 f_c=self.f_c,
                 w_th_s=self.w_th_s(t_s) if self.w_th_s is not None else None,
                 th_s=self.th_s(t_s) if self.th_s is not None else None,
-                w_q_s=self.w_q_s(t_s),
+                w_qv_s=self.w_qv_s(t_s),
                 dth_dz_top=self.dth_dz_top,
             )
 

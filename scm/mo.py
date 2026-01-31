@@ -36,7 +36,7 @@ class MOResult:
     u_st: jnp.ndarray  # Friction velocity at the surface
     w_th: jnp.ndarray  # Sensible heat flux at the surface
     w_thv: jnp.ndarray  # Buoyancy flux at the surface
-    w_q: jnp.ndarray  # Moisture flux at the surface
+    w_qv: jnp.ndarray  # Moisture flux at the surface
     L: jnp.ndarray  # Obukhov length
     zeta: jnp.ndarray  # Stability parameter (z/L)
     zeta_err: jnp.ndarray  # Relative error in zeta convergence
@@ -318,7 +318,7 @@ def init_mo_sfc(
             u_st=u_st,
             w_th=w_th_s,
             w_thv=conv.w_th_to_w_thv(th=th_0, w_th=w_th_s, w_qv=w_qv_s),
-            w_q=w_qv_s,
+            w_qv=w_qv_s,
             L=L,
             zeta=zeta,
             zeta_err=zeta_err,

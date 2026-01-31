@@ -8,7 +8,9 @@ import jax.numpy as jnp
 from scm import consts
 from scm.grid import StaggeredGrid
 from scm.interfaces import ClosureFn
+from scm.grad import d_dz
 from scm.mo import MOResult
+from scm import conversions as conv
 
 
 @jax.tree_util.register_dataclass
@@ -18,19 +20,25 @@ class ProgVarsMYNN:
 
     u: jnp.ndarray
     v: jnp.ndarray
-    # th_l: jnp.ndarray  # liquid water potential temperature
-    # q_w: jnp.ndarray  # total water content q_w = q_l + q_v (liquid + vapor)
     thv: jnp.ndarray  # virtual potential temperature
+    qv: jnp.ndarray  # specific humidity (vapor only, no condensation)
     q_sq: jnp.ndarray  #  q^2 = uu + vv + ww = 2*TKE
+    # No condensation implemented
+    # thl: jnp.ndarray  # liquid water potential temperature
+    # q_w: jnp.ndarray  # total water content q_w = q_l + q_v (liquid + vapor)
 
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class DiagVarsMYNN:
+    th: jnp.ndarray  # diagnosed dry potential temperature
+
     # Parameterized fluxes and variances
     u_w: jnp.ndarray
     v_w: jnp.ndarray
-    thv_w: jnp.ndarray  # virtual heat flux
+    w_thv: jnp.ndarray  # buoyancy flux (virtual potential temperature flux)
+    w_th: jnp.ndarray  # sensible heat flux
+    w_qv: jnp.ndarray  # moisture flux
     th_th: jnp.ndarray  # potential temperature variance
 
     # Length scales
@@ -44,7 +52,7 @@ class DiagVarsMYNN:
     Kh: jnp.ndarray
 
     # TKE terms
-    q_sq_tt: jnp.ndarray  # TKE turbulent transport
+    w_qke: jnp.ndarray  # TKE flux (turbulent transport)
     q_sq_P_S: jnp.ndarray  # TKE production by shear
     q_sq_P_B: jnp.ndarray  # TKE production by buoyancy
     q_sq_eps: jnp.ndarray  # TKE dissipation
@@ -69,18 +77,13 @@ def init_mynn(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
 
     def _closure(state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
         # in MYNN, q_sq is 2*TKE not specific humidity!
-        u, v, thv = state.u, state.v, state.thv
+        u, v, thv, qv = state.u, state.v, state.thv, state.qv
         q = jnp.sqrt(jnp.clip(state.q_sq, min=q_sq_min))  # clip to avoid div by zero
         q = jnp.pad((q[1:] + q[:-1]) / 2, 1, mode="edge")  # interp to half-levels  # todo: maybe pad to zero
 
-        # Attention! Currently, consider dry atmosphere only
-        qv = ql = 0  # specific humidity of vapor and liquid water
-        th = thv / (1 + 0.61 * qv - ql)  # pot temp
-        dth_dz = grads.thv  # todo: proper conversion
-        w_thv_0 = mo_res.w_th  # todo: proper conversion
-
-        # Reference potential temperature at lowest grid level
-        th_0 = th[0]  # todo: correct? surface?
+        # Compute dry potential temperature gradient
+        th = conv.thv_to_th(thv=thv, qv=qv)
+        dth_dz = d_dz(th, dz=grid.dz, bot="edge", top=0.0)  # todo: should have top BC from forcing here
 
         ## Length scale (all on half-levels)
         # Surface length scale (eq 53, NN09)
@@ -99,8 +102,9 @@ def init_mynn(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
         L_T = 0.23 * jnp.trapezoid(q * grid.zh, grid.zh) / jnp.trapezoid(q, grid.zh)  # todo: maybe better on non-interp
 
         # Buoyance length scale (eq 55, NN09)
+        th_0 = th[0]  # todo: NN09 uses dry pot temp, but should this be virtual pot temp?
         N = jnp.sqrt(jnp.clip(consts.g / th_0 * grads.thv, a_min=0.0))
-        q_c = jnp.clip((consts.g / th_0) * w_thv_0 * L_T, a_min=0.0) ** (1 / 3)  # in line after eq 55, NN09
+        q_c = jnp.clip((consts.g / th_0) * mo_res.w_thv * L_T, a_min=0.0) ** (1 / 3)  # in line after eq 55, NN09
         L_B = jnp.where(
             grads.thv <= 0,
             jnp.inf,
@@ -177,37 +181,41 @@ def init_mynn(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
         # Parameterized fluxes
         u_w = -Km * grads.u
         v_w = -Km * grads.v
-        thv_w = -Kh * grads.thv
+        w_thv = -Kh * grads.thv  # buoyancy flux
+        w_th = -Kh * dth_dz  # sensible heat flux, todo: this should be the same as conversion from w_thv, right?
+        w_qv = -Kh * grads.qv  # moisture flux
 
         # TKE turbulent transport
-        q_sq_tt = L * q * Sq * grads.q_sq  # eq 24, MY82, todo, sign?
+        w_qke = L * q * Sq * grads.q_sq  # eq 24, MY82
 
-        # Parameterized pot. temp. variance
+        # Parameterized dry pot. temp. variance
         lam2 = B2 * L  # eq 12, MY82
-        th_w = thv_w  # todo: proper conversion
-        th_th = -lam2 / q * th_w * dth_dz  # eq 29, MY82
+        th_th = -lam2 / q * w_th * dth_dz  # eq 29, MY82
 
         # TKE production and dissipation (needed on full levels)
         P_S = -(u_w * grads.u + v_w * grads.v)  # shear production, eq. 5, NN09
         P_S = (P_S[1:] + P_S[:-1]) / 2  # average to full levels
 
-        P_B = consts.g / th_0 * thv_w  # buoyancy production, eq. 5, NN09
+        P_B = consts.g / th_0 * w_thv  # buoyancy production, eq. 5, NN09
         P_B = (P_B[1:] + P_B[:-1]) / 2  # average to full levels
 
         L_full = (L[1:] + L[:-1]) / 2  # average first to eliminate L=0 at surface leading to div by zero below
         eps = state.q_sq ** (3 / 2) / (B1 * L_full)  # dissipation, eq. 12, NN09
 
-        # Ct2
+        # CT2
         # ct2 = 3.2 * B1 ** (1 / 3) / B2 * L ** (-2 / 3) * th_th
         # todo: check simplification
         # Simplified to avoid NaN from 0 * inf when L=0, since th_th is proportional to L.
         # th_th = -lam2 / q * th_w * dth_dz, where lam2 = B2 * L
-        ct2 = -3.2 * B1 ** (1 / 3) * jnp.clip(L, a_min=0.0) ** (1 / 3) / q * th_w * dth_dz
+        ct2 = -3.2 * B1 ** (1 / 3) * jnp.clip(L, a_min=0.0) ** (1 / 3) / q * w_thv * dth_dz
 
         return DiagVarsMYNN(
+            th=th,
             u_w=u_w,
             v_w=v_w,
-            thv_w=thv_w,
+            w_th=w_th,
+            w_thv=w_thv,
+            w_qv=w_qv,
             th_th=th_th,
             L=L,
             L_S=L_S,
@@ -215,7 +223,7 @@ def init_mynn(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
             L_B=L_B,
             Km=Km,
             Kh=Kh,
-            q_sq_tt=q_sq_tt,
+            w_qke=w_qke,
             q_sq_P_S=P_S,
             q_sq_P_B=P_B,
             q_sq_eps=eps,
