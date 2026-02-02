@@ -12,7 +12,7 @@ import jax.tree_util
 import pandas as pd
 
 from scm.grid import StaggeredGrid
-from scm.mo import MOResult
+from scm.mo import MOResult, MOSettings
 
 # Placeholders for concrete implementations of ProgVars and DiagVars per closure scheme
 ProgVarsT = TypeVar("ProgVarsT")
@@ -27,8 +27,10 @@ class Simulation(Generic[ProgVarsT]):
 
     name: str
     grid: StaggeredGrid
+    mo_settings: MOSettings
     init: ProgVarsT
     forcing: TransientForcing
+
     t_start_s: int
     t_end_s: int
     t_index: pd.DatetimeIndex | None = None  # Optional time index for output

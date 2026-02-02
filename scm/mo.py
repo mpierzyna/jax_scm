@@ -16,12 +16,14 @@ SimFuncType = Callable[[jnp.ndarray], jnp.ndarray]
 
 
 @dataclasses.dataclass
-class SurfaceProperties:
-    """Surface properties for the model."""
+class MOSettings:
+    """Settings for MO atmosphere surface coupling."""
 
-    z0m: float
-    z0h: float
-    sim_funcs: MOSimilarityFuncs
+    z0m: float  # Momentum roughness length, m
+    z0h: float  # Heat roughness length, m
+
+    # Businger-Dyer similarity functions by default
+    sim_funcs: MOSimilarityFuncs = dataclasses.field(default_factory=lambda: BusingerDyerSimFuncs())
 
     @property
     def mh_ratio(self):

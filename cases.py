@@ -3,7 +3,8 @@ import jax.random
 import matplotlib.pyplot as plt
 
 from scm import consts
-from scm.closures.mynn import ProgVarsMYNN
+from scm.mo import MOSettings
+from scm.mynn.interfaces import ProgVarsMYNN
 from scm.grid import StaggeredGrid
 from scm.interfaces import TransientForcing, Simulation
 
@@ -299,6 +300,7 @@ def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation[ProgVarsMYNN]:
         grid=grid,
         init=init,
         forcing=forcing,
+        mo_settings=MOSettings(z0m=0.1, z0h=0.1),  # todo: check if agrees with paper
         t_start_s=9 * 3600,
         t_end_s=16 * 3600,
     )

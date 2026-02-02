@@ -7,9 +7,9 @@ from typing import Tuple, Callable
 import jax
 from jax import numpy as jnp
 
+from scm import consts
 from scm.interfaces import Simulation, ProgVarsT, DiagVarsT, ModelFn
 from scm.mo import MOResult
-from scm import consts
 
 
 class IterationTimer:

@@ -5,14 +5,14 @@ import jax.numpy as jnp
 import numpy as np
 import xarray as xr
 
+from scm import consts
 from scm.forcing import convert
 from scm.forcing.interp import get_ts_interp_fn, xr_interp_vert
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, TransientForcing
-from scm.closures.mynn import ProgVarsMYNN
 from scm.io import era5
 from scm.io.cache import XRCache
-from scm import consts
+from scm.mynn.interfaces import ProgVarsMYNN
 
 
 def get_era5_sim(
@@ -55,6 +55,7 @@ def get_era5_sim(
     # Disable jax nan checking temporarily because it will otherwise raise exception
     with jax.debug_nans(False):
         # Interpolate on log(z)
+        # todo: this should be agl!
         ds_interp = xr_interp_vert(ds, z=np.log(z), z_target=np.log(z_target), dim="bottom_top")
         ds_interp = ds_interp.interpolate_na(dim="bottom_top", method="nearest", fill_value="extrapolate")
 

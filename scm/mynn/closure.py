@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
-
-import jax
 import jax.numpy as jnp
 
 from scm import consts
@@ -11,56 +8,17 @@ from scm.grad import d_dz
 from scm.grid import StaggeredGrid
 from scm.interfaces import ClosureFn
 from scm.mo import MOResult
+from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
 
 
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
-class ProgVarsMYNN:
-    """Prognostic variables"""
+def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
+    """MYNN level-2.5 turbulence closure scheme.
 
-    u: jnp.ndarray
-    v: jnp.ndarray
-    th: jnp.ndarray  # potential temperature (no condensation, so th_l = th)
-    qv: jnp.ndarray  # specific humidity (vapor only, no condensation)
-    qke: jnp.ndarray  #  qke = q^2 = uu + vv + ww = 2*TKE
-
-
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
-class DiagVarsMYNN:
-    # Parameterized fluxes and variances
-    u_w: jnp.ndarray
-    v_w: jnp.ndarray
-    w_th: jnp.ndarray  # sensible heat flux
-    w_thv: jnp.ndarray  # buoyancy flux (virtual potential temperature flux)
-    w_qv: jnp.ndarray  # moisture flux
-    th_th: jnp.ndarray  # potential temperature variance
-
-    # Length scales
-    L: jnp.ndarray  # turbulent length scale
-    L_S: jnp.ndarray  # surface length scale
-    L_T: jnp.ndarray  # turbulent length scale
-    L_B: jnp.ndarray  # buoyancy length scale
-
-    # Eddy diffusivities
-    Km: jnp.ndarray
-    Kh: jnp.ndarray
-
-    # TKE terms
-    w_qke: jnp.ndarray  # TKE flux (turbulent transport)
-    qke_P_S: jnp.ndarray  # TKE production by shear
-    qke_P_B: jnp.ndarray  # TKE production by buoyancy
-    qke_eps: jnp.ndarray  # TKE dissipation
-
-    # Auxiliary parameters
-    ct2: jnp.ndarray  # temperature structure function coefficient
-
-
-def init_mynn(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
-    """
     References
     ----------
-    [1]_ Nakanishi, Mikio, and Hiroshi Niino. “Development of an Improved Turbulence Closure Model for the Atmospheric Boundary Layer.” Journal of the Meteorological Society of Japan. Ser. II, vol. 87, no. 5, 2009, pp. 895–912. DOI.org (Crossref), https://doi.org/10.2151/jmsj.87.895.
+    [1]_ Nakanishi, Mikio, and Hiroshi Niino. "Development of an Improved Turbulence Closure Model for
+    the Atmospheric Boundary Layer." Journal of the Meteorological Society of Japan. Ser. II, vol. 87,
+    no. 5, 2009, pp. 895–912. DOI.org (Crossref), https://doi.org/10.2151/jmsj.87.895.
 
     """
     # MYNN closure constants
