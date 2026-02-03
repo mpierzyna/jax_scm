@@ -116,26 +116,19 @@ def get_gabls1(Nz: int = 64, plot: bool = False, random_seed: int = 0) -> Simula
     )
 
 
-def diagnose_blh(u_w, v_w, u_st_sfc):
-    tau = jnp.sqrt(u_w**2 + v_w**2)  # not divided by rho
-    blh = tau < 0.05
-
-
 if __name__ == "__main__":
-    sim = get_gabls1(Nz=64, plot=True)
+    sim = get_gabls1(Nz=400, plot=True)
     model = init_model(sim)
     state_hist, diag_hist, mo_hist, t = simulate_adaptive_dt(
         model=model,
         sim=sim,
         dt_s_init=0.001,
         dt_s_max=1,
-        cfl_max=0.1,
+        cfl_max=0.05,
         dt_s_out=60 * 5,
     )
 
-    diagnose_blh(u_w=diag_hist.u_w, v_w=diag_hist.v_w, u_st_sfc=mo_hist.u_st)
-
     # Save output
     ds = make_dataset(state_hist, diag_hist, mo_hist, time=t / 60 / 60, grid=sim.grid)
-    ds.to_netcdf("out.nc")
+    ds.to_netcdf(f"out_{sim.grid.Nz}.nc")
     print("Written to disk.")
