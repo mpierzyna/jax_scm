@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+    <style>
+        h2, h3, h4, h5, h6 {
+            clear: both;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+        [data-collapsed="true"]::before {
+            content: "▶ ";
+            font-size: .5em;
+        }
+        [data-collapsed="false"]::before {
+            content: "▼ ";
+            font-size: .5em;
+        }
+        div:has(img) {
+            margin-bottom: 24pt;
+            float: left;
+        }
+        div > img {
+            height: auto;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body style="{{ style|to_css }}">
+{{ body|safe }}
+
+</body>
+<!-- Script to toggle visibility of sections -->
+<script>
+    const headings = document.querySelectorAll('h2, h3, h4, h5, h6');
+
+    headings.forEach(heading => {
+        // Initialize with a visual indicator
+        heading.setAttribute('data-collapsed', 'false');
+
+        heading.addEventListener('click', function() {
+            // Toggle collapsed state
+            const isCurrentlyCollapsed = this.getAttribute('data-collapsed') === 'true';
+            this.setAttribute('data-collapsed', !isCurrentlyCollapsed);
+
+            // Apply visibility
+            applyVisibility();
+        });
+    });
+
+    function applyVisibility() {
+        // First, show everything
+        document.querySelectorAll('.hidden').forEach(el => el.classList.remove('hidden'));
+
+        // Then hide content under collapsed headings
+        document.querySelectorAll('[data-collapsed="true"]').forEach(heading => {
+            const headingLevel = parseInt(heading.tagName.substring(1));
+            let element = heading.nextElementSibling;
+
+            while (element) {
+                // Stop at HR or same/higher level heading
+                if (element.tagName === 'HR' ||
+                    (element.tagName && element.tagName.startsWith('H') &&
+                     parseInt(element.tagName.substring(1)) <= headingLevel)) {
+                    break;
+                }
+
+                element.classList.add('hidden');
+                element = element.nextElementSibling;
+            }
+        });
+    }
+</script>
+</html>

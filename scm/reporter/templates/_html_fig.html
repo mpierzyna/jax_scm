@@ -1,0 +1,4 @@
+<div style="{{ style|to_css }}" class="{{ class_name }}">
+    {{ fig|safe }}
+    {% if caption %}<span><b>Figure {{ counter }}</b>: {{ caption }}</span>{% endif %}
+</div>

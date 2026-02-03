@@ -1,0 +1,4 @@
+<div class="{{ class_name }}">
+    <img src="data:image/{{ format }};base64,{{ data }}" style="{{ style|to_css }}"/><br/>
+    {% if caption %}<span><b>Figure {{ counter }}</b>: {{ caption }}</span>{% endif %}
+</div>
