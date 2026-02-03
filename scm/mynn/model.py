@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 from typing import Tuple
 
 import jax
@@ -9,7 +8,7 @@ from scm.grad import d_dz
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, ModelFn, StaticForcing
 from scm.mo import init_mo_sfc, MOResult
-from scm.mynn.closure import init_closure
+from scm.mynn.closure import init_closure, get_qke_sfc
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
 
 
@@ -50,25 +49,22 @@ def init_model(sim: Simulation[ProgVarsMYNN]) -> ModelFn[ProgVarsMYNN, DiagVarsM
         dv_dz = d_dz(v, dz=grid.dz, bot="edge", top=0.0)
         dth_dz = d_dz(th, dz=grid.dz, bot="edge", top=forcing.dth_dz_top)
         dqv_dz = d_dz(qv, dz=grid.dz, bot="edge", top=0.0)  # todo: upper BC?
-        dqke_dz = d_dz(qke, dz=grid.dz, bot="edge", top=0.0)  # todo: lower BC = 0 ok?
+
+        qke_sfc = get_qke_sfc(u_st=mo_res.u_st)  # surface BC for qke
+        dqke_dz = d_dz(qke, dz=grid.dz, bot=(state.qke[0] - qke_sfc) / grid.z[0], top=0.0)
+
         grads = ProgVarsMYNN(u=du_dz, v=dv_dz, th=dth_dz, qke=dqke_dz, qv=dqv_dz)
 
         # Execute closure to get fluxes
+        # Lower boundary conditions for fluxes are applied INSIDE closure!
         diag = closure_fn(state, grads, mo_res)
 
-        # Update fluxes with MO results
-        u_w = diag.u_w.at[0].set(mo_res.u_w)
-        v_w = diag.v_w.at[0].set(mo_res.v_w)
-        w_th = diag.w_th.at[0].set(mo_res.w_th)
-        w_qv = diag.w_qv.at[0].set(mo_res.w_qv)
-        w_qke = diag.w_qke  # todo: any update for TKE needed?
-
         # Compute flux divergence (half levels -> full levels)
-        div_u_w = (u_w[1:] - u_w[:-1]) / grid.dz
-        div_v_w = (v_w[1:] - v_w[:-1]) / grid.dz
-        div_w_th = (w_th[1:] - w_th[:-1]) / grid.dz
-        div_w_qv = (w_qv[1:] - w_qv[:-1]) / grid.dz
-        div_w_qke = (w_qke[1:] - w_qke[:-1]) / grid.dz
+        div_u_w = (diag.u_w[1:] - diag.u_w[:-1]) / grid.dz
+        div_v_w = (diag.v_w[1:] - diag.v_w[:-1]) / grid.dz
+        div_w_th = (diag.w_th[1:] - diag.w_th[:-1]) / grid.dz
+        div_w_qv = (diag.w_qv[1:] - diag.w_qv[:-1]) / grid.dz
+        div_w_qke = (diag.w_qke[1:] - diag.w_qke[:-1]) / grid.dz
 
         # Compute tendencies
         u_tend = f_c * v - f_c * v_geo - div_u_w
@@ -77,9 +73,8 @@ def init_model(sim: Simulation[ProgVarsMYNN]) -> ModelFn[ProgVarsMYNN, DiagVarsM
         qv_tends = -div_w_qv
         qke_tends = diag.qke_P_S + diag.qke_P_B - diag.qke_eps + div_w_qke
 
-        # Gather tendencies and updated diagnostics (because MOST values added!)
+        # Gather tendencies
         tends = ProgVarsMYNN(u=u_tend, v=v_tend, th=th_tends, qv=qv_tends, qke=qke_tends)
-        diag = dataclasses.replace(diag, u_w=u_w, v_w=v_w, w_th=w_th, w_qv=w_qv)
         return tends, diag, mo_res
 
     return _model

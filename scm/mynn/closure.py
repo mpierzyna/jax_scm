@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 
 from scm import consts
@@ -9,6 +10,18 @@ from scm.grid import StaggeredGrid
 from scm.interfaces import ClosureFn
 from scm.mo import MOResult
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
+
+# MYNN closure constants
+A1, A2, B1, B2, C1 = 1.18, 0.665, 24.0, 15.0, 0.137  # eq 66, NN09
+C2, C3, C4, C5 = 0.75, 0.352, 0.0, 0.2  # eq 66, NN09
+gamma1 = 0.235  # below A4, NN09
+g_m_min = 1e-12
+
+
+@jax.jit
+def get_qke_sfc(u_st: jnp.ndarray) -> jnp.ndarray:
+    """Surface boundary condition for QKE (q^2)"""
+    return B1 ** (2 / 3) * u_st**2  # MY82, eq. 54
 
 
 def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
@@ -21,11 +34,6 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
     no. 5, 2009, pp. 895–912. DOI.org (Crossref), https://doi.org/10.2151/jmsj.87.895.
 
     """
-    # MYNN closure constants
-    A1, A2, B1, B2, C1 = 1.18, 0.665, 24.0, 15.0, 0.137  # eq 66, NN09
-    C2, C3, C4, C5 = 0.75, 0.352, 0.0, 0.2  # eq 66, NN09
-    gamma1 = 0.235  # below A4, NN09
-    g_m_min = 1e-12
 
     # def _partial_condensation(wth_l, w_qw, SH25):
     #     """Not in use"""
@@ -48,10 +56,12 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
     #
     #     return w_thv, ql
 
+    @jax.jit
     def _closure(state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
-        # In MYNN, q_sq is 2*TKE not specific humidity!
+        # In MYNN, qke (q^2) is 2*TKE not specific humidity!
         q = jnp.sqrt(jnp.clip(state.qke, min=consts.qke_min))  # clip to avoid div by zero
         q = jnp.pad((q[1:] + q[:-1]) / 2, 1, mode="edge")  # interp to half-levels  # todo: maybe pad to zero
+        q = q.at[0].set(get_qke_sfc(u_st=mo_res.u_st) ** (1 / 2))  # surface BC for q, not q^2!
 
         # Virtual potential temperature gradient needed for buoyancy terms
         thv = conv.th_to_thv(th=state.th, qv=state.qv)
@@ -159,6 +169,14 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
 
         # TKE turbulent transport
         w_qke = L * q * Sq * grads.qke  # eq 24, MY82
+
+        # Apply lower boundary conditions from MO before computing TKE budget
+        u_w = u_w.at[0].set(mo_res.u_w)
+        v_w = v_w.at[0].set(mo_res.v_w)
+        w_th = w_th.at[0].set(mo_res.w_th)
+        w_thv = w_thv.at[0].set(mo_res.w_thv)
+        w_qv = w_qv.at[0].set(mo_res.w_qv)
+        w_qke = w_qke.at[0].set(0.0)  # todo: Gemini says this. Confirm!
 
         # Parameterized dry pot. temp. variance
         lam2 = B2 * L  # eq 12, MY82
