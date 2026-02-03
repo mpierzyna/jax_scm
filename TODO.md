@@ -1,9 +1,11 @@
 # Todo
 - [ ] ERA5 forcing
-  - [ ] use above ground height for interpolation! 
-  - [ ] switch to Google ARCO ERA5 for more PL
-  - [ ] improve interpolation. At least use u10, v10, t2m. Maybe use spline interpolation
+  - [x] use above ground height for interpolation! 
+  - [x] switch to Google ARCO ERA5 for more PL
+  - [x] improve interpolation. At least use u10, v10, t2m. Maybe use spline interpolation
+  - [ ] Use spline interpolation to increase sampling of forcing conditions
 - [ ] Validation
-  - [ ] Compare against GABLS1
+  - [x] Compare against GABLS1
   - [ ] Compare against Wangara
 - [ ] Mini usecase for differentiability. Modify initial conditions for Cabauw?
+- [ ] How to deal with ever-growing boundary layer

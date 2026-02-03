@@ -15,9 +15,10 @@ logger = logging.getLogger("scm.io.cache")
 class XRCache:
     """Simple cache for xarray datasets to avoid redundant downloading."""
 
-    def __init__(self, cache_dir: str | pathlib.Path):
+    def __init__(self, cache_dir: str | pathlib.Path, disable: bool = False):
         self.cache_dir = pathlib.Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.disable = disable
 
     @staticmethod
     def get_hash(fn: Callable, *args, **kwargs) -> str:
@@ -38,6 +39,10 @@ class XRCache:
 
         @wraps(fn)
         def wrapper(*args, **kwargs) -> xr.Dataset:
+            if self.disable:
+                logger.debug("Cache disabled. Computing result without caching.")
+                return fn(*args, **kwargs)
+
             # Compute hash from arguments and use it as cache file path
             input_hash = self.get_hash(fn, *args, **kwargs)
             cache_file = self.cache_dir / f"{fn.__name__}_{input_hash}.nc"

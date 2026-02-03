@@ -1,18 +1,78 @@
 from __future__ import annotations
+from typing import Literal, Dict
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
+from scipy.interpolate import CubicSpline
 
 from scm import consts
 from scm.forcing import convert
-from scm.forcing.interp import get_ts_interp_fn, xr_interp_vert
+from scm.forcing.interp import get_ts_interp_fn
+from scm.mo import MOSettings
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, TransientForcing
 from scm.io import era5
 from scm.io.cache import XRCache
 from scm.mynn.interfaces import ProgVarsMYNN
+
+
+def interp(
+    y: xr.DataArray,
+    z: xr.DataArray,
+    z_target: xr.DataArray,
+    dim: str,
+    dim_out: str = "grid",
+    extra: Dict[int, xr.DataArray] | None = None,
+) -> xr.DataArray:
+    """Interpolate y(z) to new vertical levels z_target using cubic spline interpolation.
+
+    Parameters
+    ----------
+    y : xr.DataArray
+        DataArray with vertical profiles to interpolate.
+    z : xr.DataArray
+        DataArray with vertical levels corresponding to y.
+    z_target : xr.DataArray
+        DataArray with target vertical levels for interpolation.
+    dim : str
+        Name of the vertical dimension in y and z.
+    dim_out : str, optional
+        Name of the vertical dimension in the output DataArray, by default "grid".
+    extra: Dict[int, xr.DataArray] | None
+        Extra points to include in the interpolation.
+        Keys are the z values, values are the corresponding y values.
+    """
+
+    def _interp_cubic(y: np.ndarray, z: np.ndarray, z_target: np.ndarray) -> np.ndarray:
+        """Interpolate profile y(z) to new vertical levels z_target."""
+        z_sorting = np.argsort(z)
+        spl = CubicSpline(z[z_sorting], y[z_sorting], extrapolate=False)
+        y_ = spl(z_target)
+        return y_
+
+    if extra is not None:
+        # concatenate extra levels
+        z = xr.concat([z, xr.DataArray(list(extra.keys()), dims=[dim])], dim=dim)
+
+        # concatenate extra points
+        y = xr.concat([y, *list(extra.values())], dim=dim)
+
+    y = xr.apply_ufunc(
+        _interp_cubic,
+        y,
+        z,
+        z_target,
+        input_core_dims=[[dim], [dim], [dim_out]],
+        output_core_dims=[[dim_out]],
+        vectorize=True,
+    )
+
+    # Eliminate NaNs by nearest neighbour interpolation
+    y = y.interpolate_na(dim=dim_out, method="nearest", fill_value="extrapolate")
+
+    return y
 
 
 def get_era5_sim(
@@ -21,6 +81,7 @@ def get_era5_sim(
     lon_deg: float,
     time_slice: str | slice,
     grid: StaggeredGrid,
+    source: Literal["destine", "google"],
     cache_dir: str | None = ".era5_cache",
 ) -> Simulation:
     """Get a Simulation object with ERA5 forcing data."""
@@ -31,43 +92,53 @@ def get_era5_sim(
     else:
         download_data = era5.download_data
 
+    if source == "destine":
+        # I need to make some modifications to adjust coordinates
+        # Also below, we have hard coded inversion of level dim for Google version
+        raise NotImplementedError
+
     # Download ERA5 data
-    ds = download_data(lat_deg, lon_deg, time_slice)
-    ds = ds.rename_dims(isobaricInhPa="bottom_top")  # more telling coordinate names
+    ds = download_data(lat_deg, lon_deg, time_slice, source)
+    p_hPa = ds["level"].drop_vars("level")  # save pressure
+    ds = ds.drop_vars("level")  # drop because it causes problems for interpolation
 
     # Compute geostrophic wind
     ds_uv_geo = convert.uv_geo_from_z(lat_deg=ds["latitude"], lon_deg=ds["longitude"], z=ds["z"])
     ds = ds.merge(ds_uv_geo, compat="override")
 
     # Compute potential temperature
-    p_hPa = ds["isobaricInhPa"]
     ds["th"] = convert.th_from_tk(t_k=ds["t"], p_hPa=p_hPa)
 
     # We don't need neighbours anymore
     ds = ds.sel(latitude=lat_deg, longitude=lon_deg, method="nearest")
 
     # Geopotential to height
-    z = ds["z"] / 9.81  # in m
-    z_target = xr.DataArray(grid.z, dims=["bottom_top"])
+    z_agl = (ds["z"] - ds["z_sfc"]) / 9.81  # in m
+    z_target = xr.DataArray(grid.z, dims=["grid"])
 
     # Interpolate ERA5 to grid levels
-    # As ERA5 has very few levels near surface, we fill missing values with constants after interpolation
+    # As ERA5 has very few levels near surface, we add surface values as extra points
     # Disable jax nan checking temporarily because it will otherwise raise exception
     with jax.debug_nans(False):
-        # Interpolate on log(z)
-        # todo: this should be agl!
-        ds_interp = xr_interp_vert(ds, z=np.log(z), z_target=np.log(z_target), dim="bottom_top")
-        ds_interp = ds_interp.interpolate_na(dim="bottom_top", method="nearest", fill_value="extrapolate")
+        uv0 = xr.DataArray(np.zeros(ds.sizes["time"]), dims=["time"], coords=ds["u10"].coords)
+        u = interp(ds["u"], z_agl, z_target, dim="level", extra={10: ds["u10"], 0: uv0})
+        v = interp(ds["v"], z_agl, z_target, dim="level", extra={10: ds["v10"], 0: uv0})
+        th = interp(ds["th"], z_agl, z_target, dim="level", extra={2: ds["t2m"], 0: ds["skt"]})  # todo: to pot temp
+
+        # No extra points, so extrpolation automatically used in `interp`
+        qv = interp(ds["q"], z_agl, z_target, dim="level")
+        u_geo = interp(ds["ug"], z_agl, z_target, dim="level")
+        v_geo = interp(ds["vg"], z_agl, z_target, dim="level")
 
     # Create time coordinate in s
-    t = ds["valid_time"]
+    t = ds["time"]
     t = t - t[0]
     t = t.astype("timedelta64[s]").astype(int)
     t_start_s, t_end_s = t[[0, -1]].values
 
     # Create forcing functions for geostrophic wind
-    u_geo_fn = get_ts_interp_fn(time_s=jnp.array(t.values), data=jnp.array(ds_interp["ug"].values))
-    v_geo_fn = get_ts_interp_fn(time_s=jnp.array(t.values), data=jnp.array(ds_interp["vg"].values))
+    u_geo_fn = get_ts_interp_fn(time_s=jnp.array(t.values), data=jnp.array(u_geo.values))
+    v_geo_fn = get_ts_interp_fn(time_s=jnp.array(t.values), data=jnp.array(v_geo.values))
 
     # Create surface temperature forcing function
     t_s_fn = get_ts_interp_fn(
@@ -93,12 +164,11 @@ def get_era5_sim(
     )
 
     # Create initial conditions
-    ds_era5_init = ds_interp.isel(valid_time=0)
     init = ProgVarsMYNN(
-        u=jnp.array(ds_era5_init["u"].values),
-        v=jnp.array(ds_era5_init["v"].values),
-        th=jnp.array(ds_era5_init["th"].values),
-        qv=jnp.array(ds_era5_init["q"].values),
+        u=jnp.array(u.isel(time=0).values),
+        v=jnp.array(v.isel(time=0).values),
+        th=jnp.array(th.isel(time=0).values),
+        qv=jnp.array(qv.isel(time=0).values),
         qke=jnp.ones(grid.Nz) * 0.01,  # small initial TKE
     )
 
@@ -108,9 +178,10 @@ def get_era5_sim(
         grid=grid,
         init=init,
         forcing=frc,
+        mo_settings=MOSettings(z0h=0.1, z0m=0.1),
         t_start_s=int(t_start_s),
         t_end_s=int(t_end_s),
-        t_index=ds.indexes["valid_time"],
+        t_index=ds.indexes["time"],
     )
 
     return sim
@@ -123,8 +194,9 @@ if __name__ == "__main__":
     sim = get_era5_sim(
         name="ERA5 Test Simulation",
         lat_deg=52.0,
-        lon_deg=4.0,
+        lon_deg=5.0,
         time_slice="2020-01-01",
-        grid=StaggeredGrid(Nz=100, H=2000.0),
+        grid=StaggeredGrid(Nz=100, H=1000.0),
+        source="google",
     )
     print(sim)

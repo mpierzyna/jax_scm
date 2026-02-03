@@ -6,6 +6,7 @@ import jax.experimental.checkify
 import numpy as np
 
 import cases
+from scm.grid import StaggeredGrid
 from scm.forcing.era5 import get_era5_sim  # noqa
 from scm.forcing.interp import interp_dtindex
 from scm.io.local import make_dataset
@@ -32,17 +33,18 @@ if __name__ == "__main__":
     # sim = cases.get_gabls1(Nz=64)
 
     # Wangara
-    sim = cases.get_wangara(Nz=50)
+    # sim = cases.get_wangara(Nz=50)
 
     # Cabauw from ERA5
-    # sim = get_era5_sim(
-    #     name="Cabauw_Test",
-    #     lat_deg=52.0,
-    #     lon_deg=5.0,
-    #     grid=StaggeredGrid(Nz=300, H=3000.0),
-    #     # time_slice=slice("2025-07-01", "2025-07-03"),
-    #     time_slice="2025-07-01",
-    # )
+    sim = get_era5_sim(
+        name="Cabauw_Test",
+        lat_deg=52.0,
+        lon_deg=5.0,
+        grid=StaggeredGrid(Nz=200, H=4000.0),
+        # time_slice=slice("2025-07-01", "2025-07-03"),
+        time_slice="2025-07-01",
+        source="google",
+    )
 
     # Init and run model
     model = init_model(sim)
@@ -60,7 +62,7 @@ if __name__ == "__main__":
         sim=sim,
         dt_s_init=0.001,
         dt_s_max=1,
-        cfl_max=0.1,
+        cfl_max=0.05,
         dt_s_out=60 * 5,
     )
 
