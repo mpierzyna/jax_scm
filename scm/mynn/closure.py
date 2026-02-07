@@ -64,7 +64,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
         q = jnp.sqrt(jnp.clip(qke_h, min=consts.qke_min))  # turbulent velocity scale
 
         # Virtual potential temperature gradient needed for buoyancy terms
-        thv = conv.th_to_thv(th=state.th, qv=state.qv)
+        thv = conv.t_to_tv(t=state.th, qv=state.qv)
         dthv_dz = d_dz(thv, dz=grid.dz, bot="edge", top=grads.th[-1])
 
         ## Length scale (all on half-levels)

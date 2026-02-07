@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import TypeVar, Literal, Callable
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -12,15 +12,15 @@ T = TypeVar("T")
 
 
 @jax.jit
-def thv_to_th(*, thv: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
-    """Virtual potential temperature to dry potential temperature."""
-    return thv / (1 + 0.61 * qv)
+def tv_to_t(*, tv: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
+    """Compute dry temperature (from virtual air/potential temperature)"""
+    return tv / (1 + 0.61 * qv)
 
 
 @jax.jit
-def th_to_thv(*, th: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
-    """Dry potential temperature to virtual potential temperature."""
-    return th * (1 + 0.61 * qv)
+def t_to_tv(*, t: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
+    """Compute virtual temperature (from air/potential temperature)"""
+    return t * (1 + 0.61 * qv)
 
 
 @jax.jit
@@ -120,11 +120,72 @@ def tk_to_th(*, tk: T, p_hPa: T) -> T:
     return th_k
 
 
-def get_p_hypsometric(*, z: jnp.ndarray, tkv: jnp.ndarray, p_0_hPa: jnp.ndarray | float) -> jnp.ndarray:
-    """Convert geopotential height (m) to pressure (hPa) using hypsometric equation."""
-    p_hPa = []
-    for i in range(1, len(z) + 1):
-        rhs = -consts.g / consts.Rd * jnp.trapezoid(1 / tkv[:i], x=z[:i])
-        p_i = p_0_hPa * jnp.exp(rhs)
-        p_hPa.append(p_i)
-    return jnp.array(p_hPa)
+def get_p_rho_fn(mode: Literal["th", "tk"]) -> Callable:
+    """Get function to compute pressure and density profiles"""
+
+    @jax.jit
+    def get_p_rho(t, qv, z, p_s):
+        """Computes density and pressure profiles using the hypsometric equation.
+
+        Parameters
+        ----------
+        t : jnp.ndarray
+            Air temperature profile (K) or potential temperature profile (K), depending on mode.
+        qv : jnp.ndarray
+            Specific humidity profile (kg/kg).
+        z : jnp.ndarray
+            Geopotential height profile (m).
+        p_s : float
+            Surface pressure (Pa).
+
+        Returns
+        -------
+        p_profile : jnp.ndarray
+            Pressure profile (Pa).
+        rho_profile : jnp.ndarray
+            Density profile (kg/m^3).
+        """
+        p0 = 100000.0
+
+        def scan_fn(p_i, carry_vars):
+            """Compute pressure and density from previous level using hypsometric equation."""
+            if mode == "th":
+                # Estimate air temp from pot temp
+                th_j, qv_j, dz = carry_vars
+                tk_j = th_j * (p_i / p0) ** (consts.Rd / consts.cp)
+            elif mode == "tk":
+                # Directly use air temp
+                tk_j, qv_j, dz = carry_vars
+            else:
+                raise ValueError(f"Invalid mode: {mode}. Must be 'th' or 'tk'.")
+
+            # Get virtual air temp
+            tkv_j = t_to_tv(t=tk_j, qv=qv_j)
+
+            # Use hypsometric equation to compute pressure at this level
+            # p_j = p_prev * exp(-g * dz / (Rd * Tv))
+            p_j = p_i * jnp.exp(-consts.g * dz / (consts.Rd * tkv_j))
+
+            # Density from ideal gas law
+            rho_j = p_j / (consts.Rd * tkv_j)
+
+            return p_j, (p_j, rho_j)
+
+        dz = jnp.diff(z)
+        dz = jnp.concat([jnp.array([z[0]]), dz])
+
+        # Integrate from surface to top of the column
+        _, (p_profile, rho_profile) = jax.lax.scan(scan_fn, p_s, (t, qv, dz))
+
+        return p_profile, rho_profile
+
+    return get_p_rho
+
+
+p_rho_from_th = get_p_rho_fn(mode="th")
+p_rho_from_tk = get_p_rho_fn(mode="tk")
+
+
+def w_eff(*, omega, rho):
+    """Compute vertical velocity (w) from pressure vertical velocity (omega)."""
+    return -omega / (rho * consts.g)

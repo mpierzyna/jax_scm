@@ -341,7 +341,7 @@ def init_mo_sfc(
             Result of Monin-Obukhov similarity evaluation
         """
         m_0 = jnp.sqrt(u_0**2 + v_0**2)  # wind magnitude
-        thv_0 = conv.th_to_thv(th=th_0, qv=qv_0)  # virtual potential temperature
+        thv_0 = conv.t_to_tv(t=th_0, qv=qv_0)  # virtual potential temperature
 
         w_th_s = w_th_s if prescribe == "w_th_s" else 0.0
         th_s = th_s if prescribe == "th_s" else 0.0
