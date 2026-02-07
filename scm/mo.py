@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 
 from scm import consts
-from scm import conversions as conv
+from scm import convert as conv
 
 logger = logging.getLogger("scm.mo")
 SimFuncType = Callable[[jnp.ndarray], jnp.ndarray]

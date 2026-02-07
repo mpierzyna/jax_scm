@@ -1,9 +1,38 @@
 from __future__ import annotations
 
+from typing import TypeVar
 import numpy as np
+import jax
+import jax.numpy as jnp
 import xarray as xr
 
 from scm import consts
+
+T = TypeVar("T")
+
+
+@jax.jit
+def thv_to_th(*, thv: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
+    """Virtual potential temperature to dry potential temperature."""
+    return thv / (1 + 0.61 * qv)
+
+
+@jax.jit
+def th_to_thv(*, th: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
+    """Dry potential temperature to virtual potential temperature."""
+    return th * (1 + 0.61 * qv)
+
+
+@jax.jit
+def w_th_to_w_thv(*, th: jnp.ndarray, w_th: jnp.ndarray, w_qv: jnp.ndarray) -> jnp.ndarray:
+    """Sensible heat flux (w'theta') to buoyancy flux (w'theta_v')."""
+    return w_th + 0.61 * th * w_qv
+
+
+@jax.jit
+def w_thv_to_w_th(*, th: jnp.ndarray, w_thv: jnp.ndarray, w_qv: jnp.ndarray) -> jnp.ndarray:
+    """Buoyancy flux (w'theta_v') to sensible heat flux (w'theta')."""
+    return w_thv - 0.61 * th * w_qv
 
 
 def uv_geo_from_z(
@@ -42,7 +71,7 @@ def uv_geo_from_z(
     lon_rad = np.deg2rad(lon_deg)
 
     # 1. Calculate Coriolis parameter (f = 2 * Omega * sin(lat))
-    f = 2 * Omega * np.sin(lat_rad)
+    f = get_fc(lat_deg=lat_deg)
 
     # 2. Calculate grid spacing in meters
     # dx = R * cos(lat) * dlon, dy = R * dlat
@@ -64,15 +93,18 @@ def uv_geo_from_z(
     return xr.Dataset({"ug": ug, "vg": vg})
 
 
-def th_from_tk(
-    t_k: xr.DataArray,
-    p_hPa: xr.DataArray,
-) -> xr.DataArray:
+def get_fc(*, lat_deg: float) -> float:
+    """Coriolis parameter at given latitude."""
+    omega = 7.2921e-5  # rad/s, Earth's angular velocity
+    return float(2 * omega * jnp.sin(jnp.deg2rad(lat_deg)))
+
+
+def tk_to_th(*, tk: T, p_hPa: T) -> T:
     """Convert temperature (K) to potential temperature (K).
 
     Parameters
     ----------
-    t_k : xr.DataArray
+    tk : xr.DataArray
         Temperature in Kelvin.
     p_hPa : xr.DataArray
         Pressure in hPa.
@@ -84,5 +116,15 @@ def th_from_tk(
     """
     p0_hPa = 1000.0  # Reference pressure in hPa
     exp = (consts.gamma - 1) / consts.gamma
-    th_k = t_k * (p0_hPa / p_hPa) ** exp
+    th_k = tk * (p0_hPa / p_hPa) ** exp
     return th_k
+
+
+def get_p_hypsometric(*, z: jnp.ndarray, tkv: jnp.ndarray, p_0_hPa: jnp.ndarray | float) -> jnp.ndarray:
+    """Convert geopotential height (m) to pressure (hPa) using hypsometric equation."""
+    p_hPa = []
+    for i in range(1, len(z) + 1):
+        rhs = -consts.g / consts.Rd * jnp.trapezoid(1 / tkv[:i], x=z[:i])
+        p_i = p_0_hPa * jnp.exp(rhs)
+        p_hPa.append(p_i)
+    return jnp.array(p_hPa)

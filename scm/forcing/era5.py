@@ -7,8 +7,7 @@ import numpy as np
 import xarray as xr
 from scipy.interpolate import CubicSpline
 
-from scm import consts
-from scm.forcing import convert
+from scm import consts, convert
 from scm.forcing.interp import get_ts_interp_fn
 from scm.mo import MOSettings
 from scm.grid import StaggeredGrid
@@ -107,7 +106,7 @@ def get_era5_sim(
     ds = ds.merge(ds_uv_geo, compat="override")
 
     # Compute potential temperature
-    ds["th"] = convert.th_from_tk(t_k=ds["t"], p_hPa=p_hPa)
+    ds["th"] = convert.tk_to_th(tk=ds["t"], p_hPa=p_hPa)
 
     # We don't need neighbours anymore
     ds = ds.sel(latitude=lat_deg, longitude=lon_deg, method="nearest")

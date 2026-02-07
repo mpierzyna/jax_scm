@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 
 from scm import consts
-from scm import conversions as conv
+from scm import convert as conv
 from scm.grad import d_dz
 from scm.grid import StaggeredGrid
 from scm.interfaces import ClosureFn

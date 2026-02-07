@@ -10,7 +10,22 @@ from jax import numpy as jnp
 
 
 def get_ts_interp_fn(time_s: jnp.ndarray, data: jnp.ndarray) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Get a jitted time series interpolation function for jax."""
+    """Get a jitted time series interpolation function for jax.
+
+    Parameters
+    ----------
+    time_s : jnp.ndarray
+        1D array of time points corresponding to the data.
+    data : jnp.ndarray
+        1D or 2D array of data values to interpolate.
+        If 2D shape should be (time, Nz).
+
+    Returns
+    -------
+    Callable[[jnp.ndarray], jnp.ndarray]
+        A function that takes new time points and returns interpolated data values.
+
+    """
     idx = jnp.arange(data.shape[0])
 
     @jax.jit

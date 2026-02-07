@@ -7,4 +7,6 @@ cp = 1005.0  # J/(kg K)
 gamma = 1.4
 Rd = 287.0  # J/(kg K)
 
+L_v = 2257e3  # J/kg, latent heat of vaporization of water
+
 qke_min = 1e-10  # minimum TKE to avoid div by zero
