@@ -15,6 +15,7 @@ dependencies = [
     "gcsfs>=2026.1.0",
     "cftime>=1.6.5",
     "dask>=2026.1.2",
+    "bokeh>=3.8.2",
 ]
 
 [tool.black]
