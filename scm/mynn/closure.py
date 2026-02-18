@@ -159,6 +159,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
         # Eddy diffusivities
         Km = L * q * SM
         Kh = L * q * SH
+        Kq = L * q * Sq  # QKE turbulent transport diffusivity (eq 24, MY82 variant)
 
         # Simple 1-2-1 filter to dampen vertical oscillations
         # todo: find reference for this
@@ -175,7 +176,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
         w_qv = -Kh * grads.qv  # moisture flux, eq. 21, NN09
 
         # TKE turbulent transport
-        w_qke = L * q * Sq * grads.qke  # eq 24, MY82
+        w_qke = Kq * grads.qke  # eq 24, MY82
 
         # Apply lower boundary conditions from MO before computing TKE budget
         u_w = u_w.at[0].set(mo_res.u_w)
@@ -218,6 +219,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
             L_B=L_B,
             Km=Km,
             Kh=Kh,
+            Kq=Kq,
             w_qke=w_qke,
             qke_P_S=P_S,
             qke_P_B=P_B,

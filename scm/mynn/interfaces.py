@@ -38,6 +38,7 @@ class DiagVarsMYNN:
     # Eddy diffusivities
     Km: jnp.ndarray
     Kh: jnp.ndarray
+    Kq: jnp.ndarray  # QKE turbulent transport diffusivity (= L * q * Sq)
 
     # TKE terms
     w_qke: jnp.ndarray  # TKE flux (turbulent transport)

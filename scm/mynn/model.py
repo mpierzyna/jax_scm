@@ -13,7 +13,7 @@ from scm.mynn.closure import init_closure, get_qke_sfc
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
 
 
-def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN]) -> ModelFn[ProgVarsMYNN, DiagVarsMYNN]:
+def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], implicit: bool) -> ModelFn[ProgVarsMYNN, DiagVarsMYNN]:
     """Initialize MYNN model function for time stepper."""
     # Make grid and forcing available locally
     grid: StaggeredGrid = sim.grid
@@ -64,12 +64,21 @@ def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN]) -> ModelFn[ProgVarsM
         # Lower boundary conditions for fluxes are applied INSIDE closure!
         diag = closure_fn(state, grads, mo_res)
 
-        # Compute flux divergence (half levels -> full levels)
-        div_u_w = (diag.u_w[1:] - diag.u_w[:-1]) / grid.dz
-        div_v_w = (diag.v_w[1:] - diag.v_w[:-1]) / grid.dz
-        div_w_th = (diag.w_th[1:] - diag.w_th[:-1]) / grid.dz
-        div_w_qv = (diag.w_qv[1:] - diag.w_qv[:-1]) / grid.dz
-        div_w_qke = (diag.w_qke[1:] - diag.w_qke[:-1]) / grid.dz
+        if implicit:
+            # In implicit mode, divergence solved in time stepper.
+            # All zero here, so only tendencies/forcing forwarded.
+            div_u_w = jnp.zeros_like(u)
+            div_v_w = jnp.zeros_like(v)
+            div_w_th = jnp.zeros_like(th)
+            div_w_qv = jnp.zeros_like(qv)
+            div_w_qke = jnp.zeros_like(qke)
+        else:
+            # In explicit mode, compute flux divergence directly (half levels -> full levels)
+            div_u_w = (diag.u_w[1:] - diag.u_w[:-1]) / grid.dz
+            div_v_w = (diag.v_w[1:] - diag.v_w[:-1]) / grid.dz
+            div_w_th = (diag.w_th[1:] - diag.w_th[:-1]) / grid.dz
+            div_w_qv = (diag.w_qv[1:] - diag.w_qv[:-1]) / grid.dz
+            div_w_qke = (diag.w_qke[1:] - diag.w_qke[:-1]) / grid.dz
 
         # Compute tendencies
         u_tend = f_c * v - f_c * v_geo - div_u_w
