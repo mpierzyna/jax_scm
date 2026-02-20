@@ -32,7 +32,6 @@ def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], implicit: bool) -> M
     # Init MYNN scheme
     closure_fn = init_closure(grid=grid)
 
-    @jax.jit
     def _model(t_s: jnp.ndarray, state: ProgVarsMYNN) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
         """Model function takes state and forcing and returns tendencies and diagnostics."""
         # Unpack state

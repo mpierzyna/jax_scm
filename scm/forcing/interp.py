@@ -28,11 +28,9 @@ def get_ts_interp_fn(time_s: jnp.ndarray, data: jnp.ndarray) -> Callable[[jnp.nd
     """
     idx = jnp.arange(data.shape[0])
 
-    @jax.jit
     def interp_fn(t_s: jnp.ndarray) -> jnp.ndarray:
         return jnp.interp(t_s, time_s, data)
 
-    @jax.jit
     def interp_2d_fn(t_s: jnp.ndarray) -> jnp.ndarray:
         # Interpolate index
         i = jnp.interp(t_s, time_s, idx)

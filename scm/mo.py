@@ -105,7 +105,6 @@ class BusingerDyerSimFuncs(MOSimilarityFuncs):
         }
         """
 
-        @jax.jit
         def _phi_m(zeta):
             x = jnp.maximum((1 - self.gamma_m * zeta), 1e-10) ** (1 / 4)  # exponent is different for m and h
             return jnp.where(
@@ -125,7 +124,6 @@ class BusingerDyerSimFuncs(MOSimilarityFuncs):
         }
         """
 
-        @jax.jit
         def _phi_h(zeta):
             x = jnp.maximum((1 - self.gamma_h * zeta), 1e-10) ** (1 / 2)  # exponent is different for m and h
             return jnp.where(
@@ -147,7 +145,6 @@ class BusingerDyerSimFuncs(MOSimilarityFuncs):
 
         """
 
-        @jax.jit
         def _psi_m(zeta):
             x = jnp.maximum((1 - self.gamma_m * zeta), 1e-10) ** (1 / 4)  # here, exponents are the same for m and h
             return jnp.where(
@@ -169,7 +166,6 @@ class BusingerDyerSimFuncs(MOSimilarityFuncs):
 
         """
 
-        @jax.jit
         def _psi_h(zeta):
             x = jnp.maximum((1 - self.gamma_h * zeta), 1e-10) ** (1 / 4)  # here, exponents are the same for m and h
             return jnp.where(
@@ -191,7 +187,6 @@ class BusingerDyerAltSimFuncs(BusingerDyerSimFuncs):
         self.b_h = b_h
 
 
-@jax.jit
 def get_L_obukhov(u_st: jnp.ndarray, w_thv: jnp.ndarray, thv: jnp.ndarray) -> jnp.ndarray:
     """Compute Obukhov length based on friction velocity and BOUYANCY flux.
     For numerical stability, clip L to a reasonable range.
@@ -236,7 +231,6 @@ def init_mo_sfc(
     # Set up similarity functions
     phi_m_fn, phi_h_fn, psi_m_fn, psi_h_fn = sim_funcs.get_all_fns()
 
-    @jax.jit
     def _eval_most(zeta, m_0, th_0, w_th, th_s):
         """Compute u_star and surface heatflux or surface temperature depending on what is prescribed.
 
@@ -282,7 +276,6 @@ def init_mo_sfc(
 
         return u_st, w_th, th_s
 
-    @jax.jit
     def _get_zeta_fixed_iter(m_0, th_0, thv_0, w_th, th_s, w_qv) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Get zeta using fixed number of iterations."""
         # zeta = jnp.where(w_th != 0.0, -jnp.sign(w_th) * 10.0, 0.0)
@@ -303,7 +296,6 @@ def init_mo_sfc(
 
         return zeta, zeta_err
 
-    @jax.jit
     def _eval_mo(
         *,
         u_0: jnp.ndarray | float,

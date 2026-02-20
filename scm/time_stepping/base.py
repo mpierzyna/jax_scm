@@ -73,14 +73,12 @@ def simulate_ab2_fixed(
     )
     timer = IterationTimer(n_total=len(t_outer))
 
-    @jax.jit
     def _scan_inner(carry, t):
         """Advance model by one step but don't accumulate outputs"""
         y1, dydt0, _, _ = carry
         y2, dydt1, diag1, mo_res1 = _ab2(t, dt_s, y1, dydt0)
         return (y2, dydt1, diag1, mo_res1), None
 
-    @jax.jit
     def _scan_outer(carry, t):
         """Advance model by inner steps and accumulate outputs"""
         carry_new, _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
@@ -113,7 +111,6 @@ def simulate_ab2_adaptive(
     t_outer = jnp.arange(sim.t_start_s, sim.t_end_s, dt_s_out)
     timer = IterationTimer(n_total=len(t_outer))
 
-    @jax.jit
     def _get_dt(Km: jnp.ndarray, Kh: jnp.ndarray) -> jnp.ndarray:
         """Compute adaptive timestep based on CFL condition for diffusion."""
         Km_max = jnp.max(Km)
@@ -123,7 +120,6 @@ def simulate_ab2_adaptive(
 
         return jnp.minimum(dt, dt_s_max)
 
-    @jax.jit
     def _while_body(carry):
         """Advance model by one adaptive step"""
         # Unpack previous state
@@ -142,13 +138,11 @@ def simulate_ab2_adaptive(
 
         return y2, dydt1, diag1, mo_res1, i, t, t_left
 
-    @jax.jit
     def _while_cond(carry):
         """Condition for adaptive stepping loop"""
         *_, t_left = carry
         return t_left > 0
 
-    @jax.jit
     def _scan_outer(carry, t):
         """Advance model by inner steps and accumulate outputs"""
         carry = (*carry, 0, t.astype(float), dt_s_out)  # Expand carry for while loop
@@ -207,14 +201,12 @@ def simulate_cn(
     )
     timer = IterationTimer(n_total=len(t_outer))
 
-    @jax.jit
     def _scan_inner(carry, t):
         """Advance model by one CN step without accumulating output."""
         y1, S_prev, _, _ = carry
         y2, S1, diag1, mo_res1 = _cn(t, dt_s, y1, S_prev)
         return (y2, S1, diag1, mo_res1), None
 
-    @jax.jit
     def _scan_outer(carry, t):
         """Advance model by inner steps and accumulate output."""
         carry_new, _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)

@@ -38,7 +38,6 @@ from scm.mynn.interfaces import ProgVarsMYNN
 from scm.time_stepping.utils import clip_state
 
 
-@jax.jit
 def cn_solve(
     phi_i: jnp.ndarray,
     K: jnp.ndarray,
@@ -156,7 +155,6 @@ def get_cn_step_fn(
         qke_new = cn_solve(y.qke, diag.Kq, dt_s, dz, S.qke, 0.0)
         return ProgVarsMYNN(u=u_new, v=v_new, th=th_new, qv=qv_new, qke=qke_new)
 
-    @jax.jit
     def _cn_warmup(t_s, dt_s, y0):
         """Warmup step: CN with S_prev = S^0 (no previous tendency stored yet).
 
@@ -168,7 +166,6 @@ def get_cn_step_fn(
         y1 = clip_state(y1)
         return y1, S0, diag0, mo_res0
 
-    @jax.jit
     def _cn(t_s, dt_s, y1, S_prev):
         """CN step with AB2-extrapolated non-diffusive explicit sources.
 

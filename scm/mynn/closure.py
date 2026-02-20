@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 
 from scm import consts
@@ -18,7 +17,6 @@ gamma1 = 0.235  # below A4, NN09
 g_m_min = 1e-12
 
 
-@jax.jit
 def get_qke_sfc(u_st: jnp.ndarray) -> jnp.ndarray:
     """Surface boundary condition for QKE (q^2)"""
     return B1 ** (2 / 3) * u_st**2  # MY82, eq. 54
@@ -56,7 +54,6 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
     #
     #     return w_thv, ql
 
-    @jax.jit
     def _closure(state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
         # In MYNN, qke (q^2) is 2*TKE not specific humidity!
         qke_h = jnp.pad((state.qke[:-1] + state.qke[1:]) / 2, 1, mode="edge")

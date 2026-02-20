@@ -11,7 +11,6 @@ from scm.time_stepping.utils import clip_state
 def get_euler_step_fn(model: ModelFn) -> Callable:
     """Euler integrator factory."""
 
-    @jax.jit
     def _euler(t_s, dt_s, y0):
         """Euler integration. y0 is model state, dydt0 are ODE tendencies"""
         dydt0, diag0, mo_res0 = model(t_s, y0)
@@ -25,7 +24,6 @@ def get_euler_step_fn(model: ModelFn) -> Callable:
 def get_ab2_step_fn(model: ModelFn) -> Callable:
     """Two-step Adams-Bashforth integrator factory."""
 
-    @jax.jit
     def _ab2(t_s, dt_s, y1, dydt0):
         """Two-step Adams-Bashforth integration. y1 is state (i-1), dydt0 are tendencies (i-2)."""
         dydt1, diag1, mo_res1 = model(t_s, y1)

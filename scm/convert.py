@@ -11,25 +11,21 @@ from scm import consts
 T = TypeVar("T")
 
 
-@jax.jit
 def tv_to_t(*, tv: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
     """Compute dry temperature (from virtual air/potential temperature)"""
     return tv / (1 + 0.61 * qv)
 
 
-@jax.jit
 def t_to_tv(*, t: jnp.ndarray, qv: jnp.ndarray) -> jnp.ndarray:
     """Compute virtual temperature (from air/potential temperature)"""
     return t * (1 + 0.61 * qv)
 
 
-@jax.jit
 def w_th_to_w_thv(*, th: jnp.ndarray, w_th: jnp.ndarray, w_qv: jnp.ndarray) -> jnp.ndarray:
     """Sensible heat flux (w'theta') to buoyancy flux (w'theta_v')."""
     return w_th + 0.61 * th * w_qv
 
 
-@jax.jit
 def w_thv_to_w_th(*, th: jnp.ndarray, w_thv: jnp.ndarray, w_qv: jnp.ndarray) -> jnp.ndarray:
     """Buoyancy flux (w'theta_v') to sensible heat flux (w'theta')."""
     return w_thv - 0.61 * th * w_qv
@@ -123,7 +119,6 @@ def tk_to_th(*, tk: T, p_hPa: T) -> T:
 def get_p_rho_fn(mode: Literal["th", "tk"]) -> Callable:
     """Get function to compute pressure and density profiles"""
 
-    @jax.jit
     def get_p_rho(t, qv, z, p_s):
         """Computes density and pressure profiles using the hypsometric equation.
 
