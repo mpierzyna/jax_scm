@@ -11,7 +11,7 @@ from scm.interfaces import Simulation, Forcing
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
 from scm.mynn.model import init_model
 from scm.grid import StaggeredGrid
-from scm.time_stepping import simulate_adaptive_dt
+from scm.time_stepping.base import simulate_adaptive_dt
 from scm.mo import MOSettings, BusingerDyerAltSimFuncs
 
 from scm.io.local import make_dataset
@@ -263,7 +263,7 @@ def get_gabls3(Nz: int = 64, plot: bool = False, random_seed: int = 0) -> Simula
 
 
 if __name__ == "__main__":
-    sim = get_gabls3(100, plot=True)
+    sim = get_gabls3(400, plot=True)
     model = init_model(sim)
     state_hist, diag_hist, mo_hist, t = simulate_adaptive_dt(
         model=model,

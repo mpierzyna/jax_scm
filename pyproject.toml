@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "An atmospheric single column model with numerical and machine learning components written in jax."
 requires-python = ">=3.12"
 dependencies = [
-    "jax==0.8.*",
+    "jax==0.9.*",
     "matplotlib",
     "seaborn",
     "flax",
@@ -16,6 +16,10 @@ dependencies = [
     "cftime>=1.6.5",
     "dask>=2026.1.2",
     "bokeh>=3.8.2",
+    "scipy>=1.16.3",
+    "pandas>=2.3.3",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.black]
@@ -38,6 +42,7 @@ dev = [
     "dvc>=3.64.1",
     "dvc-ssh>=4.2.2",
     "ipykernel>=7.1.0",
-    "pandas-stubs>=2.3.3.251201",
+    "pandas-stubs==2.3.3.*",
+    "scipy-stubs==1.16.*",
     "pip>=25.3",
 ]

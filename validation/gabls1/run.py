@@ -7,7 +7,8 @@ from scm.io.local import make_dataset
 from scm.mo import MOSettings, BusingerDyerAltSimFuncs
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
 from scm.mynn.model import init_model
-from scm.time_stepping import simulate_cn
+from scm.time_stepping import simulate
+from scm.config import load_namelist
 
 
 def get_gabls1(Nz: int = 64, plot: bool = False, random_seed: int = 0) -> Simulation[ProgVarsMYNN, DiagVarsMYNN]:
@@ -114,14 +115,10 @@ def get_gabls1(Nz: int = 64, plot: bool = False, random_seed: int = 0) -> Simula
 
 
 if __name__ == "__main__":
+    cfg = load_namelist("namelist_cn.yaml")
     sim = get_gabls1(Nz=64, plot=False)
     model = init_model(sim, implicit=True)
-    state_hist, diag_hist, mo_hist, t = simulate_cn(
-        model=model,
-        sim=sim,
-        dt_s=2,
-        dt_s_out=60 * 5,
-    )
+    state_hist, diag_hist, mo_hist, t = simulate(model=model, sim=sim, cfg=cfg)
 
     # Save output
     ds = make_dataset(state_hist, diag_hist, mo_hist, time=t / 60 / 60, grid=sim.grid)
