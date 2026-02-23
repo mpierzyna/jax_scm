@@ -118,9 +118,9 @@ if __name__ == "__main__":
     cfg = load_namelist("namelist_cn.yaml")
     sim = get_gabls1(Nz=64, plot=False)
     model = init_model(sim, implicit=True)
-    state_hist, diag_hist, mo_hist, t = simulate(model=model, sim=sim, cfg=cfg)
+    out = simulate(model=model, sim=sim, cfg=cfg)
 
     # Save output
-    ds = make_dataset(state_hist, diag_hist, mo_hist, time=t / 60 / 60, grid=sim.grid)
+    ds = make_dataset(out=out, sim=sim, time=out.t_s / 60 / 60)
     ds.to_netcdf(f"out_{sim.grid.Nz}.nc")
     print("Written to disk.")

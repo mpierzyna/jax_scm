@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
     # Init and run model
     model = init_model(sim, implicit=cfg.is_implicit)
-    state_hist, diag_hist, mo_hist, t = simulate(model=model, sim=sim, cfg=cfg)
+    out = simulate(model=model, sim=sim, cfg=cfg)
 
     # Prepare time axis
     if sim.t_index is not None:
@@ -70,6 +70,6 @@ if __name__ == "__main__":
         time = t / 3600.0  # convert to hours
 
     # Save output
-    ds = make_dataset(state_hist, diag_hist, mo_hist, time=time, grid=sim.grid)
+    ds = make_dataset(out=out, sim=sim, time=out.t_s / 60 / 60)
     ds.to_netcdf("out.nc")
     print("Written to disk.")

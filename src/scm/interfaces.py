@@ -69,10 +69,10 @@ class Forcing(Generic[ProgVarsT, DiagVarsT]):
 class Output(Generic[ProgVarsT, DiagVarsT]):
     """Simulation output container."""
 
-    state_hist: ProgVarsT
-    diag_hist: DiagVarsT
-    mo_hist: MOResult
-    time: jnp.ndarray
+    state_traj: ProgVarsT
+    diag_traj: DiagVarsT
+    mo_traj: MOResult
+    t_s: jnp.ndarray
 
 
 class ModelFn(Protocol[ProgVarsT, DiagVarsT]):

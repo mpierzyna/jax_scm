@@ -5,19 +5,14 @@ from typing import Tuple
 import jax
 from jax import numpy as jnp
 
-from scm.interfaces import Simulation, ProgVarsT, DiagVarsT, ModelFn
-from scm.mo import MOResult
+from scm.interfaces import Simulation, ModelFn, Output
 from scm.config import Namelist
 from scm.time_stepping.explicit import get_euler_step_fn, get_ab2_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
 from scm.time_stepping.utils import IterationTimer
 
 
-def simulate(
-    model: ModelFn,
-    sim: Simulation,
-    cfg: Namelist,
-) -> Tuple[ProgVarsT, DiagVarsT, MOResult, jnp.ndarray]:
+def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output:
     print("Config:", cfg)
 
     if cfg.time_int == "explicit":
@@ -51,12 +46,7 @@ def simulate(
         raise ValueError(f"Invalid time_int: {cfg.time_int}")
 
 
-def simulate_ab2_fixed(
-    model: ModelFn,
-    sim: Simulation,
-    dt_s: float,
-    dt_s_out: float,
-) -> Tuple[ProgVarsT, DiagVarsT, MOResult, jnp.ndarray]:
+def simulate_ab2_fixed(model: ModelFn, sim: Simulation, dt_s: float, dt_s_out: float) -> Output:
     """Simulate model with AB2 and constant timestep."""
     # Setup time integration
     _euler = get_euler_step_fn(model)
@@ -91,7 +81,12 @@ def simulate_ab2_fixed(
     _, (y_hist, _, diag_hist, mo_hist) = jax.lax.scan(_scan_outer, init=(y1, dydt0, diag0, mo_res0), xs=t_outer)
     timer.finalize()
 
-    return y_hist, diag_hist, mo_hist, t_outer
+    return Output(
+        state_traj=y_hist,
+        diag_traj=diag_hist,
+        mo_traj=mo_hist,
+        t_s=t_outer,
+    )
 
 
 def simulate_ab2_adaptive(
@@ -101,7 +96,7 @@ def simulate_ab2_adaptive(
     dt_s_init: float,
     dt_s_max: float,
     dt_s_out: float,
-) -> Tuple[ProgVarsT, DiagVarsT, MOResult, jnp.ndarray]:
+) -> Output:
     """Simulate model with AB2 and adaptive time stepping based on CFL condition for diffusion."""
     # Setup time integration
     _euler = get_euler_step_fn(model)
@@ -158,7 +153,12 @@ def simulate_ab2_adaptive(
     _, (y_hist, _, diag_hist, mo_hist) = jax.lax.scan(_scan_outer, init=(y1, dydt0, diag0, mo_res0), xs=t_outer)
     timer.finalize()
 
-    return y_hist, diag_hist, mo_hist, t_outer
+    return Output(
+        state_traj=y_hist,
+        diag_traj=diag_hist,
+        mo_traj=mo_hist,
+        t_s=t_outer,
+    )
 
 
 def simulate_cn(
@@ -166,7 +166,7 @@ def simulate_cn(
     sim: Simulation,
     dt_s: float,
     dt_s_out: float,
-) -> Tuple[ProgVarsT, DiagVarsT, MOResult, jnp.ndarray]:
+) -> Output:
     """Simulate model with semi-implicit Crank-Nicolson diffusion and AB2 explicit sources.
 
     Diffusion terms are solved implicitly (K fixed per step); non-diffusive
@@ -220,4 +220,9 @@ def simulate_cn(
     _, (y_hist, _, diag_hist, mo_hist) = jax.lax.scan(_scan_outer, init=(y1, S0, diag0, mo_res0), xs=t_outer)
     timer.finalize()
 
-    return y_hist, diag_hist, mo_hist, t_outer
+    return Output(
+        state_traj=y_hist,
+        diag_traj=diag_hist,
+        mo_traj=mo_hist,
+        t_s=t_outer,
+    )
