@@ -1,6 +1,8 @@
 from typing import Dict
-from scm.interfaces import Forcing
+
 import jax.numpy as jnp
+
+from scm.interfaces import Forcing
 
 
 def sample_forcing(f: Forcing, t_s: jnp.ndarray) -> Dict[str, jnp.ndarray]:

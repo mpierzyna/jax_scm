@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import pathlib
 import warnings
-from typing import Self
 from enum import StrEnum
+from typing import Self
 
 import pydantic
+
 from scm.config.yaml import yaml_to_dict
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Literal, Dict
 
 import jax
@@ -7,14 +8,13 @@ import numpy as np
 import xarray as xr
 from scipy.interpolate import CubicSpline
 
-from scm import convert
-from scm import consts
+from scm import consts, convert
 from scm.forcing.interp import get_ts_interp_fn
-from scm.mo import MOSettings
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, Forcing
 from scm.io import era5
 from scm.io.cache import XRCache
+from scm.mo import MOSettings
 from scm.mynn.interfaces import ProgVarsMYNN
 
 

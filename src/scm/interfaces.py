@@ -5,7 +5,7 @@ Specific interfaces for each model (containing extra variables) should be define
 from __future__ import annotations
 
 import dataclasses
-from typing import Protocol, Tuple, TypeVar, Generic, Callable
+from typing import Protocol, Tuple, TypeVar, Generic
 
 import jax.numpy as jnp
 import jax.tree_util
