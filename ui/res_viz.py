@@ -76,21 +76,21 @@ class FieldPlot:
     CMAP_SEQ = "Magma11"
     CMAP_DIV = "Sunset11"
 
-    def __init__(self, var: str):
+    def __init__(self, dw: DatasetWrapper, var: str):
         p = bp.figure(height=500, width=WIDTH)
         color_mapper = bm.LinearColorMapper(palette=self.CMAP_SEQ, low=0, high=1)  # dummy values
         img = p.image(
             image=[],  # will be populated by `_update_data` call
-            x=t_start,
+            x=dw.t_start,
             y=0,
-            dw=t_end - t_start,
-            dh=H,
+            dw=dw.t_end - dw.t_start,
+            dh=dw.H,
             color_mapper=color_mapper,
             level="image",
         )
         p.x_range.range_padding = p.y_range.range_padding = 0
-        p.x_range.bounds = (t_start, t_end)
-        p.y_range.bounds = (0, H)
+        p.x_range.bounds = (dw.t_start, dw.t_end)
+        p.y_range.bounds = (0, dw.H)
 
         # Color bar
         cbar = bm.ColorBar(color_mapper=color_mapper)
@@ -101,7 +101,7 @@ class FieldPlot:
         vrange.on_change("value", self._vrange_callback)
 
         # Variable selector
-        select = bm.Select(title="Select variable", options=vars_2d, value=var)
+        select = bm.Select(title="Select variable", options=dw.vars_2d, value=var)
         select.on_change("value", self._sel_callback)
 
         # Log scale toggle
@@ -125,6 +125,7 @@ class FieldPlot:
 
         # Finally, set data through high-level function to ensure all components are updated correctly
         self.var = var
+        self.dw = dw
         self._update_data(var=var, use_log=False)
 
     def _update_vmin_vmax(self, vmin: float, vmax: float):
@@ -147,7 +148,7 @@ class FieldPlot:
             self.var = var  # update currently selected variable
 
         # Load data
-        data = ds[var].values.T
+        data = self.dw.ds[var].values.T
         data = np.log10(data) if use_log else data
         data = np.where(np.isfinite(data), data, np.nan)  # log can introduce -inf, so force to NaN
 
@@ -187,8 +188,8 @@ class FieldPlot:
     def _div_color_callback(self, attr, old, use_div):
         """Switch to divergent colormap if toggled on, otherwise use sequential."""
         # Get min and max values
-        vmin = ds[self.var].values.min()
-        vmax = ds[self.var].values.max()
+        vmin = self.dw.ds[self.var].values.min()
+        vmax = self.dw.ds[self.var].values.max()
 
         if use_div:
             self.log_toggle.active = False  # log doesn't make sense for divergent data
@@ -220,7 +221,7 @@ class ResultViz:
 
     def get_layout(self):
         return bl.column(
-            # FieldPlot("m").get_layout(),
+            FieldPlot(dw=self.dw, var="m").get_layout(),
             TsPlot(dw=self.dw, var="mo_u_st").get_layout(),
         )
 
