@@ -35,9 +35,17 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT
         def _step_fn(carry, t, dt_out):
             def _while_body(c):
                 y, prev, diag, mo, i, t_curr, t_left = c
-                dt = jnp.minimum(_get_dt(diag), t_left)
+                dt = jnp.minimum(_get_dt(diag), t_left)  # if dt is larger than time left, take smaller step
                 y_n, prev_n, diag_n, mo_n = _ab2(t_curr, dt, y, prev)
-                return y_n, prev_n, diag_n, mo_n, i + 1, t_curr + dt, t_left - dt
+                return (
+                    y_n,
+                    prev_n,
+                    diag_n,
+                    mo_n,
+                    i + 1,
+                    t_curr + dt,  # advance current time by dt
+                    t_left - dt,  # time left for next iteration until output
+                )
 
             loop_init = (*carry, 0, t.astype(float), dt_out)
             loop_final = jax.lax.while_loop(lambda c: c[-1] > 0, _while_body, loop_init)

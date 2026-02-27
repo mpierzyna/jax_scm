@@ -5,6 +5,7 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
+from scm.config import Namelist
 from scm.grad import d_dz
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, ModelFn, Forcing
@@ -13,7 +14,7 @@ from scm.mynn.closure import init_closure, get_qke_sfc
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
 
 
-def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], implicit: bool) -> ModelFn[ProgVarsMYNN, DiagVarsMYNN]:
+def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], cfg: Namelist) -> ModelFn[ProgVarsMYNN, DiagVarsMYNN]:
     """Initialize MYNN model function for time stepper."""
     # Make grid and forcing available locally
     grid: StaggeredGrid = sim.grid
@@ -63,7 +64,7 @@ def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], implicit: bool) -> M
         # Lower boundary conditions for fluxes are applied INSIDE closure!
         diag = closure_fn(state, grads, mo_res)
 
-        if implicit:
+        if cfg.is_implicit:
             # In implicit mode, divergence solved in time stepper.
             # All zero here, so only tendencies/forcing forwarded.
             div_u_w = jnp.zeros_like(u)

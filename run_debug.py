@@ -33,7 +33,7 @@ if __name__ == "__main__":
     # sim = cases.get_gabls1(Nz=64)
 
     # Wangara
-    sim = cases.get_wangara(Nz=200)
+    # sim = cases.get_wangara(Nz=200)
 
     # Cabauw from ERA5
     # sim = get_era5_sim(
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         name="ERA5 Test Simulation",
         lat_deg=52.0,
         lon_deg=5.0,
-        time_slice=("2006-07-01T11:00", "2006-07-02T12:00"),
+        time_slice=("2006-07-01T12:00", "2006-07-02T12:00"),
         grid=StaggeredGrid(Nz=150, H=3000.0),
         source="cds",
     )
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     cfg = cfg_cn
 
     # Init and run model
-    model = init_model(sim, implicit=cfg.is_implicit)
+    model = init_model(sim, cfg=cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
 
     # Prepare time axis

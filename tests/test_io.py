@@ -13,7 +13,7 @@ def test_sim_from_ds():
     # Run simulation normally
     sim = get_gabls1()
     sim.t_end_s = 60 * 60  # 1 hour
-    model = init_model(sim, implicit=True)
+    model = init_model(sim, cfg=cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
     ds = out_to_ds(out=out, sim=sim)
 
