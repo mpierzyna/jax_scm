@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Tuple
+import dataclasses
 from PIL import Image
 import matplotlib.pyplot as plt
 from scm.forcing.era5 import get_era5_sim
@@ -67,11 +68,12 @@ def run():
         name="ERA5 Test Simulation",
         lat_deg=52.0,
         lon_deg=5.0,
-        time_slice=("2006-07-01T12:00", "2006-07-02T12:00"),
-        grid=StaggeredGrid(Nz=150, H=3000.0),
+        time_slice=("2006-07-01T11:00", "2006-07-02T12:00"),
+        grid=StaggeredGrid(Nz=200, H=3000.0),
         source="cds",
         cache_dir="./era5",
     )
+    # sim.forcing = dataclasses.replace(sim.forcing, ls_tends=None)  # disable large-scale tendencies
 
     # Load config and run simulation
     cfg = load_namelist("namelist_cn.yaml")
@@ -79,11 +81,11 @@ def run():
     out = simulate(model=model, sim=sim, cfg=cfg)
 
     # Save output
-    out_file = pathlib.Path(f"out_{sim.grid.Nz}.nc")
+    out_file = pathlib.Path(f"out.nc")
     ds = out_to_ds(
         out=out,
         sim=sim,
-        time=interp_dtindex(t_s=np.array(out.t_s), idx=sim.t_index),  # todo: this is weird
+        time=interp_dtindex(t_s=np.array(out.t_s), idx=sim.t_index).round("1min"),
     )
     ds.to_netcdf(out_file)
     print("Written to disk.")
@@ -91,12 +93,14 @@ def run():
 
 
 if __name__ == "__main__":
-    # ds = run()
-    ds = xr.open_dataset("out_150.nc")
+    ds = run()
+    # ds = xr.open_dataset("out.nc")
+    ds = ds.sel(time=slice("2006-07-01T12:00", "2006-07-02T12:00"))  # exclude spinup
 
     ds["m"] = np.sqrt(ds["u"] ** 2 + ds["v"] ** 2)
     ds["d"] = np.rad2deg(np.arctan2(-ds["u"], -ds["v"]))
     z = ds["z"].values
+    t_h = np.linspace(0, 24, ds.sizes["time"])
 
     with BaseReport(title="GABLS3 Validation", path=f"val_gabls3.html") as r:
         r.add_text(
@@ -105,7 +109,7 @@ if __name__ == "__main__":
         )
 
         r.add_heading("Profiles after init (12:10 UTC)", level=2)
-        ds_1210UTC = ds.isel(time=2)
+        ds_1210UTC = ds.sel(time="2006-07-01T12:10")
 
         # th
         fig, ax = get_ref_ax(
@@ -160,7 +164,7 @@ if __name__ == "__main__":
         r.add_mpl_fig(fig, caption="Wind direction at 12:10 UTC")
 
         r.add_heading("Profiles at 00:00 UTC", level=2)
-        ds_000UTC = ds.isel(time=144).sel(z=slice(0, 500))
+        ds_000UTC = ds.sel(time="2006-07-02T00:00", z=slice(0, 500))
 
         # th
         fig, ax = get_ref_ax(
@@ -213,3 +217,93 @@ if __name__ == "__main__":
         ax.set_ylabel("Height, z")
         ax.legend()
         r.add_mpl_fig(fig, caption="Wind direction at 00:00 UTC")
+
+        # Time series
+        # T2m
+        r.add_heading("Time series", level=2)
+        fig, ax = get_ref_ax(
+            "ref_bosveld14/fig3.png",
+            (0, 24),
+            (12, 30),
+            trim=(82, 631, 558, 12),  # left, bottom, right, top
+        )
+        ax.plot(t_h, ds["mo_th2"] - 273.15, **plot_kwargs)  # todo: convert to air
+        ax.set_xlabel("Time, h")
+        ax.set_xticks(np.arange(0, 25, 6))
+        ax.set_ylabel("2m air temperature, deg C")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Potential temperature profile at 00:00 UTC")
+
+        # # qv
+        # fig, ax = get_ref_ax(
+        #     "ref_bosveld14/fig2.png",
+        #     (0.007, 0.012),
+        #     (0, 500),
+        #     trim=(602, 616, 24, 15),  # left, bottom, right, top
+        # )
+        # ax.plot(ds_000UTC["qv"], ds_000UTC.z, **plot_kwargs)
+        # ax.set_xlabel("Specific humidity, kg/kg")
+        # ax.set_ylabel("Height, z")
+        # ax.legend()
+        # r.add_mpl_fig(fig, caption="Specific humidity profile at 00:00 UTC")
+
+        # m
+        m200 = ds["m"].interp(z=200)
+        fig, ax = get_ref_ax(
+            "ref_bosveld14/fig3.png",
+            (0, 24),
+            (0, 14),
+            trim=(82, 135, 558, 508),  # left, bottom, right, top
+        )
+        ax.plot(t_h, m200, **plot_kwargs)
+        ax.set_xlabel("Time, h")
+        ax.set_xticks(np.arange(0, 25, 6))
+        ax.set_ylabel("Wind speed at 200m, m/s")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Wind speed at 200m")
+
+        # d
+        u200, v200 = ds["u"].interp(z=200), ds["v"].interp(z=200)
+        d200 = np.rad2deg(np.arctan2(-u200, -v200))
+        fig, ax = get_ref_ax(
+            "ref_bosveld14/fig3.png",
+            (0, 24),
+            (60, 200),
+            trim=(594, 136, 41, 502),  # left, bottom, right, top
+        )
+        ax.plot(t_h, d200, **plot_kwargs)
+        ax.set_xlabel("Time, h")
+        ax.set_xticks(np.arange(0, 25, 6))
+        ax.set_ylabel("Wind speed at 200m, m/s")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Wind direction at 200m")
+
+        # shfx
+        fig, ax = get_ref_ax(
+            "ref_bosveld14/fig4.png",
+            (0, 24),
+            (-80, 200),
+            trim=(97, 139, 542, 24),  # left, bottom, right, top
+        )
+        ax.plot(t_h, ds["mo_w_th"] * 1.216e3, **plot_kwargs)
+        ax.set_xlabel("Time, h")
+        ax.set_xticks(np.arange(0, 25, 6))
+        ax.set_ylabel("Sensible heat flux, W/m^2")
+        ax.set_yticks(np.arange(-80, 201, 40))
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Surface sensible heat flux")
+
+        # ust
+        fig, ax = get_ref_ax(
+            "ref_bosveld14/fig4.png",
+            (0, 24),
+            (0.0, 0.7),
+            trim=(593, 138, 42, 22),  # left, bottom, right, top
+        )
+        ax.plot(t_h, ds["mo_u_st"], **plot_kwargs)
+        ax.set_xlabel("Time, h")
+        ax.set_xticks(np.arange(0, 25, 6))
+        ax.set_ylabel("Surface friction velocity, m/s")
+        ax.set_yticks(np.arange(0, 0.71, 0.1))
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Surface friction velocity")
