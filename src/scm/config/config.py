@@ -35,6 +35,11 @@ class Namelist(pydantic.BaseModel):
     # Output time step, seconds
     dt_s_out: float = 5 * 60.0  # 5 mins
 
+    # Whether to print advanced timing information and progress during simulation.
+    # Needs to be disabled when `simulate` is jitted, e.g., for ML training.
+    # todo: implement timer outside simulate function and only pass callback. Then jitting should work.
+    print_advanced_status: bool = True
+
     @pydantic.model_validator(mode="after")
     def implicit_no_adaptive(self) -> Self:
         """If time_int is implicit, adaptive_timestep must be None."""

@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-from typing import Tuple, Callable
-
 import jax
 from jax import numpy as jnp
 
-from scm.interfaces import Simulation, ModelFn, Output, ProgVarsT, DiagVarsT
 from scm.config import Namelist
+from scm.interfaces import Simulation, ModelFn, Output, ProgVarsT, DiagVarsT
 from scm.time_stepping.explicit import get_euler_step_fn, get_ab2_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
 from scm.time_stepping.utils import IterationTimer
-from scm.mo import MOResult
 
 
 def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT, DiagVarsT]:
     """Unified simulation entry point with a single outer loop."""
-    print("Config:", cfg)
+    if cfg.print_advanced_status:
+        print("Config:", cfg)
 
     # Prepare time coordinates
     t_outer = jnp.arange(sim.t_start_s, sim.t_end_s, cfg.dt_s_out)
-    timer = IterationTimer(n_total=len(t_outer))
+    if cfg.print_advanced_status:
+        # todo: refactor timing/status printing. Pass only callback, so simulate can be jitted
+        timer = IterationTimer(n_total=len(t_outer))
 
     # Configure the time integration stepper
     if cfg.time_int == "explicit" and cfg.adaptive_timestep is not None:
@@ -72,16 +72,19 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT
             return new_carry, new_carry
 
     # Run the simulation loop
-    jax.debug.print("Begin simulation...")
+    jax.debug.print("Begin simulation...")  # print regardless of cfg.print_progress.
     y1, prev0, diag0, mo0 = _warmup(t_outer[0], cfg.dt_s, sim.init)
 
     def _outer_body(carry, t):
         new_carry, out = _step_fn(carry, t, cfg.dt_s_out)
-        jax.debug.callback(timer.callback, t + cfg.dt_s_out)
+        if cfg.print_advanced_status:
+            jax.debug.callback(timer.callback, t + cfg.dt_s_out)
         return new_carry, out
 
     _, history = jax.lax.scan(_outer_body, init=(y1, prev0, diag0, mo0), xs=t_outer)
-    timer.finalize()
+    if cfg.print_advanced_status:
+        timer.finalize()
+    jax.debug.print("Simulation complete.")
 
     # Assemble Output by merging the initial state with the trajectory
     y_h, _, diag_h, mo_h = history
