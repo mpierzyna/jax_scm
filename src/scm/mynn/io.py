@@ -9,7 +9,14 @@ from scm.forcing.interp import get_ts_interp_fn
 
 
 def sim_from_ds(ds: xr.Dataset, **override) -> Simulation[ProgVarsMYNN, DiagVarsMYNN]:
-    """Load simulation from dataset"""
+    """Load simulation from dataset.
+
+    Note
+    ----
+    Forcing functions are restored by interpolating the saved time series. This may not exactly reproduce
+    the original forcing, leading to error accumulation over time. Hence, the simulated output may deviate from the
+    original. Simple tests (see tests/test_io.py) show that mean error is typically below 0.1%.
+    """
     ## Grid
     H = ds["zh"][-1].item()
     Nz = ds.sizes["z"]
