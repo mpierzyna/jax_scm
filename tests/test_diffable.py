@@ -1,12 +1,14 @@
 from typing import Tuple
-import pytest
+
 import jax
 import jax.numpy as jnp
+import pytest
 
-from scm.mynn.interfaces import ProgVarsMYNN
 from scm import mo
-from scm.mynn import closure
 from scm.grid import StaggeredGrid
+from scm.mynn import closure
+from scm.mynn.interfaces import ProgVarsMYNN
+from shared import FIXTURE_ROOT
 
 
 @pytest.fixture
@@ -163,3 +165,30 @@ def test_mynn_mo_res_diffable(mynn_state):
 
     assert jnp.isfinite(d_dust)
     assert d_dust != 0.0
+
+
+def test_e2e_diffable():
+    """Test end-to-end differentiability of a short simulation"""
+    from scm.examples.gabls1 import get_gabls1
+    from scm.config import load_namelist
+    from scm.mynn.model import init_model
+    from scm.time_stepping import simulate
+
+    cfg = load_namelist(FIXTURE_ROOT / "gabls1/namelist_cn.yaml")
+    cfg.dt_s_out = cfg.dt_s_out  # output every step
+    cfg.print_advanced_status = False  # simulation cannot be jitted with advanced outputs
+
+    # Setup a few steps of a simulation
+    sim = get_gabls1(Nz=32)
+    sim.t_end_s = int(cfg.dt_s * 100)
+    model = init_model(sim=sim, cfg=cfg)
+
+    @jax.jit
+    def objective(u):
+        out = simulate(model=model, sim=sim, cfg=cfg)
+        return jnp.mean(out.state_traj.u - u)
+
+    d_du = jax.grad(objective)(jnp.ones(sim.grid.Nz) * 5.0)
+
+    assert jnp.all(jnp.isfinite(d_du))
+    assert jnp.any(d_du != 0.0)
