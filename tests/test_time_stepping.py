@@ -38,8 +38,7 @@ def test_time_stepping_configs(cfg):
     sim.t_end_s = 3 * 60 * 60  # 3 hours
 
     # Initialize model (implicit must be True for implicit time stepping)
-    is_implicit = cfg.time_int == TimeIntMethod.IMPLICIT
-    model = init_model(sim, implicit=is_implicit)
+    model = init_model(sim, cfg)
 
     # Run simulation
     out = simulate(model=model, sim=sim, cfg=cfg)

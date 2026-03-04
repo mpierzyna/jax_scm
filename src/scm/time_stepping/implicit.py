@@ -38,15 +38,15 @@ from scm.mynn.interfaces import ProgVarsMYNN
 from scm.time_stepping.utils import clip_state
 
 
-def cn_solve(
+def get_cn_sparse_lin_system(
     phi_i: jnp.ndarray,
     K: jnp.ndarray,
     dt: float,
     dz: float,
     S: jnp.ndarray,
     sfc_flux: float | jnp.ndarray,
-) -> jnp.ndarray:
-    """Solve one Crank-Nicolson diffusion step for a single variable.
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Get sparse linear system for one CN diffusion step of a single variable.
 
     Parameters
     ----------
@@ -66,8 +66,14 @@ def cn_solve(
 
     Returns
     -------
-    phi_i_next : jnp.ndarray, shape (Nz,)
-        Updated state after one CN step.
+    lhs_dl : jnp.ndarray, shape (Nz,)
+        Sub-diagonal of the CN lhs matrix.
+    lhs_d : jnp.ndarray, shape (Nz,)
+        Diagonal of the CN lhs matrix.
+    lhs_du : jnp.ndarray, shape (Nz,)
+        Super-diagonal of the CN lhs matrix.
+    rhs : jnp.ndarray, shape (Nz,)
+        Right-hand side of the CN system, including explicit sources and surface flux.
     """
     # Zero out boundary faces so they are handled as explicit BCs, not implicit diffusion
     K_eff = K.at[0].set(0.0).at[-1].set(0.0)
@@ -80,27 +86,29 @@ def cn_solve(
     A_d = -(A_dl + A_du)  # shape (Nz,)
 
     # Assemble tridiagonal diffusion matrix A
-    A = jnp.diag(A_d) + jnp.diag(A_du[:-1], k=1) + jnp.diag(A_dl[1:], k=-1)
-
-    I = jnp.eye(N=phi_i.shape[0])
+    # for dense computation, leave for clarity
+    # A = jnp.diag(A_d) + jnp.diag(A_du[:-1], k=1) + jnp.diag(A_dl[1:], k=-1)
+    # I = jnp.eye(N=phi_i.shape[0])
 
     # Surface-flux explicit source: b_sfc[0] = sfc_flux / dz, zero elsewhere
     b_sfc = jnp.zeros_like(phi_i).at[0].set(sfc_flux / dz)
 
-    # lhs = I - (dt / 2.0) * A
+    # lhs = I - (dt / 2.0) * A  # dense version
     lhs_d = 1 - (dt / 2.0) * A_d
     lhs_dl = -(dt / 2.0) * A_dl
     lhs_du = -(dt / 2.0) * A_du
-    rhs = (I + (dt / 2.0) * A) @ phi_i + dt * S + dt * b_sfc
 
-    # Tridiagonal solver expects batches, so reshape to (1, Nz) and (1, Nz, 1) for b
-    phi_i_next = tridiagonal_solve(
-        dl=lhs_dl[None, :],
-        d=lhs_d[None, :],
-        du=lhs_du[None, :],
-        b=rhs[None, :, None],
+    # rhs = (I + (dt / 2.0) * A) @ phi_i + dt * S + dt * b_sfc  # dense version
+    rhs = (
+        phi_i
+        + (dt / 2.0) * A_d * phi_i
+        + (dt / 2.0) * A_dl * jnp.concatenate([jnp.zeros(1), phi_i[:-1]])  # phi[j-1]
+        + (dt / 2.0) * A_du * jnp.concatenate([phi_i[1:], jnp.zeros(1)])  # phi[j+1]
+        + dt * S
+        + dt * b_sfc
     )
-    return phi_i_next.squeeze()
+
+    return lhs_dl, lhs_d, lhs_du, rhs
 
 
 def get_cn_step_fn(
@@ -147,13 +155,29 @@ def get_cn_step_fn(
         Surface BCs come from MO (treated explicitly as a source term).
         """
         dz = grid.dz
-        u_new = cn_solve(y.u, diag.Km, dt_s, dz, S.u, mo_res.u_w)
-        v_new = cn_solve(y.v, diag.Km, dt_s, dz, S.v, mo_res.v_w)
-        th_new = cn_solve(y.th, diag.Kh, dt_s, dz, S.th, mo_res.w_th)
-        qv_new = cn_solve(y.qv, diag.Kh, dt_s, dz, S.qv, mo_res.w_qv)
-        # QKE surface flux is always zero (surface BC set in closure)
-        qke_new = cn_solve(y.qke, diag.Kq, dt_s, dz, S.qke, 0.0)
-        return ProgVarsMYNN(u=u_new, v=v_new, th=th_new, qv=qv_new, qke=qke_new)
+
+        # Get lhs and rhs of tridiagnal system for all variables
+        u_sys = get_cn_sparse_lin_system(y.u, diag.Km, dt_s, dz, S.u, mo_res.u_w)
+        v_sys = get_cn_sparse_lin_system(y.v, diag.Km, dt_s, dz, S.v, mo_res.v_w)
+        th_sys = get_cn_sparse_lin_system(y.th, diag.Kh, dt_s, dz, S.th, mo_res.w_th)
+        qv_sys = get_cn_sparse_lin_system(y.qv, diag.Kh, dt_s, dz, S.qv, mo_res.w_qv)
+
+        # todo: confirm. QKE surface FLUX is always zero. Surface QKE as BC used in closure
+        qke_sys = get_cn_sparse_lin_system(y.qke, diag.Kq, dt_s, dz, S.qke, 0.0)
+
+        # Stack to solve in batch
+        lhs_dl, lhs_d, lhs_du, rhs = zip(*[u_sys, v_sys, th_sys, qv_sys, qke_sys])
+        lhs_dl = jnp.stack(lhs_dl)  # shape (5, Nz)
+        lhs_d = jnp.stack(lhs_d)  # shape (5, Nz)
+        lhs_du = jnp.stack(lhs_du)  # shape (5, Nz)
+        rhs = jnp.stack(rhs)  # shape (5, Nz)
+        rhs = rhs[:, :, None]  # shape (5, Nz, 1) for tridiagonal_solve
+
+        # Apply tridiagonal solver
+        # Note, I thought batch solving would be faster, but no speed up.
+        y_new = tridiagonal_solve(dl=lhs_dl, d=lhs_d, du=lhs_du, b=rhs).squeeze(-1)
+
+        return ProgVarsMYNN(u=y_new[0], v=y_new[1], th=y_new[2], qv=y_new[3], qke=y_new[4])
 
     def _cn_warmup(t_s, dt_s, y0):
         """Warmup step: CN with S_prev = S^0 (no previous tendency stored yet).
