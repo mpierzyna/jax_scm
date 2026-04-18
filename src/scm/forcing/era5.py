@@ -84,6 +84,7 @@ def _get_sim_from_ls2d(
     end: datetime.date,
     lat_deg: float,
     lon_deg: float,
+    th_ref: float,
     grid: StaggeredGrid,
     cache_dir: pathlib.Path,
 ) -> Simulation:
@@ -208,6 +209,7 @@ def _get_sim_from_ls2d(
         init=init,
         forcing=frc,
         mo_settings=MOSettings(z0h=z0h, z0m=z0m),
+        th_ref=th_ref,
         t_start_s=int(t_start_s),
         t_end_s=int(t_end_s),
         t_index=ds.indexes["time"],
@@ -222,6 +224,7 @@ def get_era5_sim(
     lon_deg: float,
     time_slice: str | datetime.date | Tuple[str, str] | Tuple[datetime.datetime, datetime.datetime],
     grid: StaggeredGrid,
+    th_ref: float,
     source: Literal["destine", "google", "cds"],
     cache_dir: str | None = ".era5_cache",
 ) -> Simulation:
@@ -270,6 +273,7 @@ def get_era5_sim(
             end=end,
             lat_deg=lat_deg,
             lon_deg=lon_deg,
+            th_ref=th_ref,
             grid=grid,
             cache_dir=cache_dir,
         )
@@ -369,6 +373,7 @@ def get_era5_sim(
         init=init,
         forcing=frc,
         mo_settings=MOSettings(z0h=0.1, z0m=0.1),
+        th_ref=th_ref,
         t_start_s=int(t_start_s),
         t_end_s=int(t_end_s),
         t_index=ds.indexes["time"],

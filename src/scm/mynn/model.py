@@ -31,7 +31,7 @@ def init_model(sim: Simulation, cfg: Namelist) -> ModelFn:
     )
 
     # Init MYNN scheme
-    closure_fn = init_closure(grid=grid)
+    closure_fn = init_closure(grid=grid, th_ref=sim.th_ref)
 
     def _model(t_s: jnp.ndarray, state: ProgVarsMYNN, params: ParamsT) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
         """Model function takes state and forcing and returns tendencies and diagnostics."""

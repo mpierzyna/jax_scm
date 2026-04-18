@@ -107,4 +107,5 @@ def get_gabls1(Nz: int = 64, plot: bool = False) -> Simulation:
         mo_settings=mo_settings,
         t_start_s=0,
         t_end_s=9 * 60 * 60,
+        th_ref=263.5,  # midpoint of surface cooling range, following microhh GABLS1 case
     )

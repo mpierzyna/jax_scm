@@ -60,9 +60,13 @@ def sim_from_ds(ds: xr.Dataset, **override) -> Simulation:
     )
 
     ## MO settings
+    # todo: why again did I want to override this?
     mo_settings = override.get("mo_settings")
     if mo_settings is None:
         mo_settings = MOSettings.deserialize(ds.attrs["mo_settings"])
+
+    ## Reference temperature
+    th_ref = ds.attrs["th_ref"]
 
     ## Initial conditions
     ds_init = ds.isel(time=0)
@@ -85,4 +89,5 @@ def sim_from_ds(ds: xr.Dataset, **override) -> Simulation:
         mo_settings=mo_settings,
         t_start_s=t_start_s,
         t_end_s=t_end_s,
+        th_ref=th_ref,
     )

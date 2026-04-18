@@ -98,7 +98,7 @@ def test_mo_diffable(prescribe, th_s, w_th_s):
 def test_mynn_diffable(mynn_state):
     """Test differentiability with respect to prognostic wind speed."""
     grid, state, grads, mo_res = mynn_state
-    closure_fn = closure.init_closure(grid)
+    closure_fn = closure.init_closure(grid, th_ref=300.0)
 
     params = MYNNParams()
 
@@ -122,7 +122,7 @@ def test_mynn_diffable(mynn_state):
 def test_mynn_grads_diffable(mynn_state):
     """Test differentiability with respect to wind gradient."""
     grid, state, grads, mo_res = mynn_state
-    closure_fn = closure.init_closure(grid)
+    closure_fn = closure.init_closure(grid, th_ref=300.0)
 
     params = MYNNParams()
 
@@ -144,7 +144,7 @@ def test_mynn_grads_diffable(mynn_state):
 def test_mynn_mo_res_diffable(mynn_state):
     """Test differentiability with respect to MO results (surface coupling)."""
     grid, state, grads, mo_res = mynn_state
-    closure_fn = closure.init_closure(grid)
+    closure_fn = closure.init_closure(grid, th_ref=300.0)
 
     params = MYNNParams()
 

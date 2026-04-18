@@ -42,6 +42,7 @@ class App:
             mo_settings=mo_settings,
             t_start_s=0,
             t_end_s=24 * 60 * 60,  # todo: hardcode 24h
+            th_ref=300.0,  # todo: expose in UI
         )
 
         model = init_model(sim)

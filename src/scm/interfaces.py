@@ -30,6 +30,7 @@ class Simulation:
     mo_settings: MOSettings
     init: ProgVarsMYNN
     forcing: Forcing
+    th_ref: float  # Reference potential temperature for buoyancy terms (K)
 
     t_start_s: int
     t_end_s: int

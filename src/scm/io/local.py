@@ -59,6 +59,7 @@ def out_to_ds(
     ds.attrs["name"] = sim.name
     ds.attrs["t_start_s"] = sim.t_start_s
     ds.attrs["t_end_s"] = sim.t_end_s
+    ds.attrs["th_ref"] = sim.th_ref
 
     try:
         # Sample forcing and add to dataset

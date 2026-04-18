@@ -108,6 +108,7 @@ def get_gabls1(
         mo_settings=mo_settings,
         t_start_s=0,
         t_end_s=9 * 60 * 60,
+        th_ref=263.5,  # midpoint of surface cooling range, following microhh GABLS1 case
     )
 
 
@@ -206,6 +207,7 @@ def get_ysu(Nz: int = 138, plot: bool = False) -> Simulation[ProgVarsMYNN, DiagV
         mo_settings=MOSettings(z0m=0.1, z0h=0.1),
         t_start_s=0,
         t_end_s=12 * 3600,
+        th_ref=300.0,
     )
 
 
@@ -254,6 +256,7 @@ def get_ekman(Nz: int = 100, plot: bool = False) -> Simulation[ProgVarsMYNN, Dia
         mo_settings=MOSettings(z0m=0.1, z0h=0.1),
         t_start_s=0,
         t_end_s=12 * 3600,
+        th_ref=300.0,
     )
 
 
@@ -329,6 +332,7 @@ def get_wangara(Nz: int = 50, plot: bool = False) -> Simulation[ProgVarsMYNN, Di
         mo_settings=MOSettings(z0m=0.1, z0h=0.1),  # todo: check if agrees with paper
         t_start_s=9 * 3600,
         t_end_s=16 * 3600,
+        th_ref=279.0,  # near-surface potential temperature from Wangara initial sounding
     )
 
 

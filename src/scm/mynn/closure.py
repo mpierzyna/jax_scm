@@ -16,7 +16,7 @@ def get_qke_sfc(u_st: jnp.ndarray, B1: float) -> jnp.ndarray:
     return B1 ** (2 / 3) * u_st**2  # MY82, eq. 54
 
 
-def init_closure(grid: StaggeredGrid) -> ClosureFn:
+def init_closure(grid: StaggeredGrid, th_ref: float) -> ClosureFn:
     """MYNN level-2.5 turbulence closure scheme.
 
     References
@@ -82,7 +82,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn:
         L_T = 0.23 * jnp.trapezoid(q * grid.zh, grid.zh) / jnp.trapezoid(q, grid.zh)  # todo: maybe better on non-interp
 
         # Buoyance length scale (eq 55, NN09)
-        th_0 = state.th[0]  # todo: where is reference temp?
+        th_0 = th_ref
         N = jnp.sqrt(jnp.clip(consts.g / th_0 * dthv_dz, a_min=0.0))  # in line after eq 55, NN09
         q_c = jnp.clip((consts.g / th_0) * mo_res.w_thv * L_T, a_min=0.0) ** (1 / 3)  # in line after eq 55, NN09
         L_B = jnp.where(
