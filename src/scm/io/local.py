@@ -6,8 +6,8 @@ import pandas as pd
 import xarray as xr
 from jax import numpy as jnp
 
-from scm.interfaces import Output, Simulation
 from scm.forcing.utils import sample_forcing
+from scm.interfaces import Output, Simulation
 
 
 def out_to_ds(

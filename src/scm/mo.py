@@ -3,15 +3,14 @@ from __future__ import annotations
 import abc
 import dataclasses
 import logging
-from typing import Callable, Tuple, Literal, Protocol, Self, Dict
+from typing import Callable, Tuple, Literal, Protocol, Self
 
 import jax
-import importlib
 import jax.numpy as jnp
-from scm.config import yaml
 
 from scm import consts
 from scm import convert as conv
+from scm.config import yaml
 
 logger = logging.getLogger("scm.mo")
 SimFuncType = Callable[[jnp.ndarray], jnp.ndarray]

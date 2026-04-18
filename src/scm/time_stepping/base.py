@@ -4,14 +4,17 @@ import jax
 from jax import numpy as jnp
 
 from scm.config import Namelist
-from scm.interfaces import Simulation, ModelFn, Output, ProgVarsT, DiagVarsT
+from scm.interfaces import Simulation, ModelFn, Output, MYNNParams
 from scm.time_stepping.explicit import get_euler_step_fn, get_ab2_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
 from scm.time_stepping.utils import IterationTimer
 
 
-def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT, DiagVarsT]:
+def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Output:
     """Unified simulation entry point with a single outer loop."""
+    if params is None:
+        params = MYNNParams()
+
     if cfg.print_advanced_status:
         print("Config:", cfg)
 
@@ -36,7 +39,7 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT
             def _while_body(c):
                 y, prev, diag, mo, i, t_curr, t_left = c
                 dt = jnp.minimum(_get_dt(diag), t_left)  # if dt is larger than time left, take smaller step
-                y_n, prev_n, diag_n, mo_n = _ab2(t_curr, dt, y, prev)
+                y_n, prev_n, diag_n, mo_n = _ab2(t_curr, dt, y, prev, params)
                 return (
                     y_n,
                     prev_n,
@@ -50,7 +53,8 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT
             loop_init = (*carry, 0, t.astype(float), dt_out)
             loop_final = jax.lax.while_loop(lambda c: c[-1] > 0, _while_body, loop_init)
             *new_carry, i, _, _ = loop_final
-            jax.debug.print("Took {i} steps", i=i)
+            if cfg.print_advanced_status:
+                jax.debug.print("Took {i} steps", i=i)
             return tuple(new_carry), tuple(new_carry)
 
     else:
@@ -66,14 +70,14 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist) -> Output[ProgVarsT
         def _step_fn(carry, t, dt_out):
             def _scan_inner(c, t_in):
                 y, prev, _, _ = c
-                return _step(t_in, cfg.dt_s, y, prev), None
+                return _step(t_in, cfg.dt_s, y, prev, params), None
 
             new_carry, _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
             return new_carry, new_carry
 
     # Run the simulation loop
     jax.debug.print("Begin simulation...")  # print regardless of cfg.print_progress.
-    y1, prev0, diag0, mo0 = _warmup(t_outer[0], cfg.dt_s, sim.init)
+    y1, prev0, diag0, mo0 = _warmup(t_outer[0], cfg.dt_s, sim.init, params)
 
     def _outer_body(carry, t):
         new_carry, out = _step_fn(carry, t, cfg.dt_s_out)

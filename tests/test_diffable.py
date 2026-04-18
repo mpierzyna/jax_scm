@@ -7,7 +7,7 @@ import pytest
 from scm import mo
 from scm.grid import StaggeredGrid
 from scm.mynn import closure
-from scm.mynn.interfaces import ProgVarsMYNN
+from scm.mynn.interfaces import ProgVarsMYNN, GradVarsMYNN, MYNNParams
 from shared import FIXTURE_ROOT
 
 
@@ -31,7 +31,7 @@ def mynn_state() -> Tuple[
     )
 
     # Synthetic gradients (half levels, Nz_h=51)
-    grads = ProgVarsMYNN(
+    grads = GradVarsMYNN(
         u=jnp.ones(Nz + 1) * 0.1,
         v=jnp.zeros(Nz + 1),
         th=jnp.ones(Nz + 1) * 0.01,
@@ -100,10 +100,12 @@ def test_mynn_diffable(mynn_state):
     grid, state, grads, mo_res = mynn_state
     closure_fn = closure.init_closure(grid)
 
+    params = MYNNParams()
+
     @jax.jit
     def objective(u_vals):
         state_ = ProgVarsMYNN(u=u_vals, v=state.v, th=state.th, qke=state.qke, qv=state.qv)
-        diag = closure_fn(state_, grads, mo_res)
+        diag = closure_fn(state_, grads, mo_res, params)
 
         # Km, Kh, ct2 are on half levels (Nz+1 = 51)
         # qke_eps is on full levels (Nz = 50)
@@ -122,10 +124,12 @@ def test_mynn_grads_diffable(mynn_state):
     grid, state, grads, mo_res = mynn_state
     closure_fn = closure.init_closure(grid)
 
+    params = MYNNParams()
+
     @jax.jit
     def objective(du_dz):
-        grads_ = ProgVarsMYNN(u=du_dz, v=grads.v, th=grads.th, qke=grads.qke, qv=grads.qv)
-        diag = closure_fn(state, grads_, mo_res)
+        grads_ = GradVarsMYNN(u=du_dz, v=grads.v, th=grads.th, qke=grads.qke, qv=grads.qv)
+        diag = closure_fn(state, grads_, mo_res, params)
 
         # u_w is on half levels (51)
         # qke_P_S is on full levels (50)
@@ -141,6 +145,8 @@ def test_mynn_mo_res_diffable(mynn_state):
     """Test differentiability with respect to MO results (surface coupling)."""
     grid, state, grads, mo_res = mynn_state
     closure_fn = closure.init_closure(grid)
+
+    params = MYNNParams()
 
     @jax.jit
     def objective(u_st):
@@ -158,7 +164,7 @@ def test_mynn_mo_res_diffable(mynn_state):
             u_w=mo_res.u_w,
             v_w=mo_res.v_w,
         )
-        diag = closure_fn(state, grads, mo_res_)
+        diag = closure_fn(state, grads, mo_res_, params)
         return jnp.mean(diag.Km) + jnp.mean(diag.u_w)
 
     d_dust = jax.grad(objective)(mo_res.u_st)

@@ -6,10 +6,10 @@ from typing import Literal, Dict, Tuple
 
 import jax
 import jax.numpy as jnp
+import ls2d
 import numpy as np
 import xarray as xr
 from scipy.interpolate import CubicSpline
-import ls2d
 
 from scm import consts, convert
 from scm.forcing.interp import get_ts_interp_fn

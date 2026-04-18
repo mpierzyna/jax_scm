@@ -6,7 +6,7 @@ import time
 from jax import numpy as jnp
 
 from scm import consts
-from scm.interfaces import ProgVarsT
+from scm.interfaces import ProgVarsMYNN
 
 
 class IterationTimer:
@@ -50,7 +50,7 @@ class IterationTimer:
         print(f"Total elapsed time: {self._format_long_duration(current_time - self.start_time)}")
 
 
-def clip_state(y: ProgVarsT) -> ProgVarsT:
+def clip_state(y: ProgVarsMYNN) -> ProgVarsMYNN:
     """Clip state variables to physically meaningful ranges."""
     if hasattr(y, "qke"):
         y = dataclasses.replace(y, qke=jnp.clip(y.qke, min=consts.qke_min))

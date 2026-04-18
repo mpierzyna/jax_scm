@@ -1,14 +1,14 @@
-import xarray as xr
 import jax.numpy as jnp
+import xarray as xr
 
-from scm.interfaces import Simulation, Forcing
-from scm.grid import StaggeredGrid
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
-from scm.mo import MOSettings
 from scm.forcing.interp import get_ts_interp_fn
+from scm.grid import StaggeredGrid
+from scm.interfaces import Simulation, Forcing
+from scm.mo import MOSettings
+from scm.mynn.interfaces import ProgVarsMYNN
 
 
-def sim_from_ds(ds: xr.Dataset, **override) -> Simulation[ProgVarsMYNN, DiagVarsMYNN]:
+def sim_from_ds(ds: xr.Dataset, **override) -> Simulation:
     """Load simulation from dataset.
 
     Note

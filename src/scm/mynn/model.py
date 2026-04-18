@@ -8,13 +8,13 @@ import jax.numpy as jnp
 from scm.config import Namelist
 from scm.grad import d_dz
 from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, ModelFn, Forcing
+from scm.interfaces import ParamsT, Simulation, ModelFn, Forcing
 from scm.mo import init_mo_sfc, MOResult
 from scm.mynn.closure import init_closure, get_qke_sfc
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
+from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN, GradVarsMYNN, MYNNParams
 
 
-def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], cfg: Namelist) -> ModelFn[ProgVarsMYNN, DiagVarsMYNN]:
+def init_model(sim: Simulation, cfg: Namelist) -> ModelFn:
     """Initialize MYNN model function for time stepper."""
     # Make grid and forcing available locally
     grid: StaggeredGrid = sim.grid
@@ -33,7 +33,7 @@ def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], cfg: Namelist) -> Mo
     # Init MYNN scheme
     closure_fn = init_closure(grid=grid)
 
-    def _model(t_s: jnp.ndarray, state: ProgVarsMYNN) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
+    def _model(t_s: jnp.ndarray, state: ProgVarsMYNN, params: ParamsT) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
         """Model function takes state and forcing and returns tendencies and diagnostics."""
         # Unpack state
         u, v, th, qke, qv = state.u, state.v, state.th, state.qke, state.qv
@@ -55,14 +55,15 @@ def init_model(sim: Simulation[ProgVarsMYNN, DiagVarsMYNN], cfg: Namelist) -> Mo
         dth_dz = d_dz(th, dz=grid.dz, bot="edge", top=forcing.dth_dz_top)
         dqv_dz = d_dz(qv, dz=grid.dz, bot="edge", top=0.0)  # todo: upper BC?
 
-        qke_sfc = get_qke_sfc(u_st=mo_res.u_st)  # surface BC for qke
-        dqke_dz = d_dz(qke, dz=grid.dz, bot=(state.qke[0] - qke_sfc) / grid.z[0], top=0.0)
+        # qke surface BC requires MO result; compute here for grads used in closure and ls_tends computation
+        qke_sfc = get_qke_sfc(u_st=mo_res.u_st, B1=params.B1)
+        dqke_dz = d_dz(qke, dz=grid.dz, bot=(qke[0] - qke_sfc) / grid.z[0], top=0.0)
 
-        grads = ProgVarsMYNN(u=du_dz, v=dv_dz, th=dth_dz, qke=dqke_dz, qv=dqv_dz)
+        grads = GradVarsMYNN(u=du_dz, v=dv_dz, th=dth_dz, qke=dqke_dz, qv=dqv_dz)
 
         # Execute closure to get fluxes
         # Lower boundary conditions for fluxes are applied INSIDE closure!
-        diag = closure_fn(state, grads, mo_res)
+        diag = closure_fn(state, grads, mo_res, params)
 
         if cfg.is_implicit:
             # In implicit mode, divergence solved in time stepper.

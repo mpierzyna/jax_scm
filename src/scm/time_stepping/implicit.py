@@ -179,25 +179,25 @@ def get_cn_step_fn(
 
         return ProgVarsMYNN(u=y_new[0], v=y_new[1], th=y_new[2], qv=y_new[3], qke=y_new[4])
 
-    def _cn_warmup(t_s, dt_s, y0):
+    def _cn_warmup(t_s, dt_s, y0, params):
         """Warmup step: CN with S_prev = S^0 (no previous tendency stored yet).
 
         AB2 extrapolation degenerates to pure S^0, making this equivalent
         to first-order-accurate forward Euler for the explicit sources.
         """
-        S0, diag0, mo_res0 = model(t_s, y0)
+        S0, diag0, mo_res0 = model(t_s, y0, params)
         y1 = _apply_cn(y0, S0, diag0, mo_res0, dt_s)
         y1 = clip_state(y1)
         return y1, S0, diag0, mo_res0
 
-    def _cn(t_s, dt_s, y1, S_prev):
+    def _cn(t_s, dt_s, y1, S_prev, params):
         """CN step with AB2-extrapolated non-diffusive explicit sources.
 
         Explicit sources (Coriolis, QKE budget, advection) are extrapolated
         as S_ab2 = (3/2)*S^n - (1/2)*S^{n-1} before solving the CN system.
         Diffusivities K are taken from the current-step closure diagnostics.
         """
-        S1, diag1, mo_res1 = model(t_s, y1)
+        S1, diag1, mo_res1 = model(t_s, y1, params)
         S_ab2 = jax.tree_util.tree_map(lambda s1, s0: (3 / 2) * s1 - (1 / 2) * s0, S1, S_prev)
         y2 = _apply_cn(y1, S_ab2, diag1, mo_res1, dt_s)
         y2 = clip_state(y2)

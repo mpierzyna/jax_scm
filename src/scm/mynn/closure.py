@@ -8,21 +8,15 @@ from scm.grad import d_dz
 from scm.grid import StaggeredGrid
 from scm.interfaces import ClosureFn
 from scm.mo import MOResult
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
-
-# MYNN closure constants
-A1, A2, B1, B2, C1 = 1.18, 0.665, 24.0, 15.0, 0.137  # eq 66, NN09
-C2, C3, C4, C5 = 0.75, 0.352, 0.0, 0.2  # eq 66, NN09
-gamma1 = 0.235  # below A4, NN09
-g_m_min = 1e-12
+from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN, GradVarsMYNN, MYNNParams
 
 
-def get_qke_sfc(u_st: jnp.ndarray) -> jnp.ndarray:
-    """Surface boundary condition for QKE (q^2)"""
+def get_qke_sfc(u_st: jnp.ndarray, B1: float) -> jnp.ndarray:
+    """Surface boundary condition for QKE (q^2 = 2*TKE)."""
     return B1 ** (2 / 3) * u_st**2  # MY82, eq. 54
 
 
-def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
+def init_closure(grid: StaggeredGrid) -> ClosureFn:
     """MYNN level-2.5 turbulence closure scheme.
 
     References
@@ -54,10 +48,16 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
     #
     #     return w_thv, ql
 
-    def _closure(state: ProgVarsMYNN, grads: ProgVarsMYNN, mo_res: MOResult) -> DiagVarsMYNN:
+    def _closure(state: ProgVarsMYNN, grads: GradVarsMYNN, mo_res: MOResult, params: MYNNParams) -> DiagVarsMYNN:
+        # Unpack params for readability
+        A1, A2, B1, B2, C1 = params.A1, params.A2, params.B1, params.B2, params.C1
+        C2, C3, C4, C5 = params.C2, params.C3, params.C4, params.C5
+        gamma1, g_m_min = params.gamma1, params.g_m_min
+
         # In MYNN, qke (q^2) is 2*TKE not specific humidity!
+        qke_sfc = get_qke_sfc(u_st=mo_res.u_st, B1=B1)
         qke_h = jnp.pad((state.qke[:-1] + state.qke[1:]) / 2, 1, mode="edge")
-        qke_h = qke_h.at[0].set(get_qke_sfc(u_st=mo_res.u_st))  # apply surface BC
+        qke_h = qke_h.at[0].set(qke_sfc)  # apply surface BC
         q = jnp.sqrt(jnp.clip(qke_h, min=consts.qke_min))  # turbulent velocity scale
 
         # Virtual potential temperature gradient needed for buoyancy terms

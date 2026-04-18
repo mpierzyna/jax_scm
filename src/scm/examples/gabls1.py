@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, Forcing
 from scm.mo import MOSettings, BusingerDyerAltSimFuncs
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
+from scm.mynn.interfaces import ProgVarsMYNN
 
 
-def get_gabls1(Nz: int = 64, plot: bool = False) -> Simulation[ProgVarsMYNN, DiagVarsMYNN]:
+def get_gabls1(Nz: int = 64, plot: bool = False) -> Simulation:
     """Get a GABLS1 simulation setup.
 
     References

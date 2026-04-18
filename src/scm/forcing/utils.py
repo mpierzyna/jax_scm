@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import warnings
-import jax
 from typing import Dict
 
+import jax
 import jax.numpy as jnp
 
 from scm.interfaces import Forcing
