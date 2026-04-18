@@ -12,6 +12,7 @@ from scm.interfaces import ParamsT, Simulation, ModelFn, Forcing
 from scm.mo import init_mo_sfc, MOResult
 from scm.mynn.closure import init_closure, get_qke_sfc
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN, GradVarsMYNN, MYNNParams
+from scm import consts
 
 
 def init_model(sim: Simulation, cfg: Namelist) -> ModelFn:
@@ -84,9 +85,22 @@ def init_model(sim: Simulation, cfg: Namelist) -> ModelFn:
         # Compute tendencies
         u_tend = f_c * v - f_c * v_geo - div_u_w
         v_tend = -f_c * u + f_c * u_geo - div_v_w
-        th_tends = -div_w_th  # todo: some geostrophic wind term?
+        th_tends = -div_w_th
         qv_tends = -div_w_qv
         qke_tends = diag.qke_P_S + diag.qke_P_B - diag.qke_eps + div_w_qke
+
+        # If large scale tendencies not explicitly given,
+        # estimate horizontal temperature advection from geostrophic wind (NN09, eq. 3).
+        # todo: double-check if this usage is correct
+        if forcing.ls_tends is None:
+            dug_dz = d_dz(u_geo, dz=grid.dz, bot="edge", top=0.0)
+            dug_dz = (dug_dz[1:] + dug_dz[:-1]) / 2  # interpolate to full levels for tendencies
+
+            dvg_dz = d_dz(v_geo, dz=grid.dz, bot="edge", top=0.0)
+            dvg_dz = (dvg_dz[1:] + dvg_dz[:-1]) / 2  # interpolate to full levels for tendencies
+
+            th_adv = f_c * sim.th_ref / consts.g * (v * dug_dz - u * dvg_dz)
+            th_tends += th_adv
 
         # Gather tendencies
         tends = ProgVarsMYNN(u=u_tend, v=v_tend, th=th_tends, qv=qv_tends, qke=qke_tends)
