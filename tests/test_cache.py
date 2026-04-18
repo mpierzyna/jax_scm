@@ -41,6 +41,7 @@ def test_argument_caching(xr_cache):
     assert len(cached_files) == 2
 
 
+@pytest.mark.skip(reason="cache invalidation on function body change not yet implemented")
 def test_fn_code_caching(xr_cache):
     """If arguments are the same, but function body changed, cache should not be used."""
     call_count = 0

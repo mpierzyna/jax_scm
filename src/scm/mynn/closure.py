@@ -62,7 +62,8 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
 
         # Virtual potential temperature gradient needed for buoyancy terms
         thv = conv.t_to_tv(t=state.th, qv=state.qv)
-        dthv_dz = d_dz(thv, dz=grid.dz, bot="edge", top=grads.th[-1])
+        dthv_dz_top = (1 + 0.61 * state.qv[-1]) * grads.th[-1] + state.th[-1] * 0.61 * grads.qv[-1]
+        dthv_dz = d_dz(thv, dz=grid.dz, bot="edge", top=dthv_dz_top)
 
         ## Length scale (all on half-levels)
         # Surface length scale (eq 53, NN09)
@@ -82,7 +83,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
 
         # Buoyance length scale (eq 55, NN09)
         th_0 = state.th[0]  # todo: where is reference temp?
-        N = jnp.sqrt(jnp.clip(consts.g / th_0 * grads.th, a_min=0.0))  # in line after eq 55, NN09
+        N = jnp.sqrt(jnp.clip(consts.g / th_0 * dthv_dz, a_min=0.0))  # in line after eq 55, NN09
         q_c = jnp.clip((consts.g / th_0) * mo_res.w_thv * L_T, a_min=0.0) ** (1 / 3)  # in line after eq 55, NN09
         L_B = jnp.where(
             dthv_dz <= 0,
@@ -124,7 +125,7 @@ def init_closure(grid: StaggeredGrid) -> ClosureFn[ProgVarsMYNN, DiagVarsMYNN]:
 
         # Diagnosed level-2 tke
         q2_sq = B1 * L**2 * SM2 * (1 - Rf) * (grads.u**2 + grads.v**2)  # eq A2, NN09
-        q2 = jnp.sqrt(jnp.clip(q2_sq, a_min=0.0))
+        q2 = jnp.sqrt(jnp.clip(q2_sq, a_min=1e-10))  # epsilon avoids grad(sqrt(0))=inf at surface where L=0
 
         ## Level-2.5 closure
         alpha_c = jnp.where(q < q2, q / q2, 1.0)  # eq 42, NN09
