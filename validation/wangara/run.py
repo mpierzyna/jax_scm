@@ -20,6 +20,7 @@ from scm.mynn.model import init_model
 from scm.reporter import BaseReport
 from scm.time_stepping import simulate
 from scm import consts
+from scm import convert
 
 plot_kwargs = {
     "color": "C1",
@@ -122,13 +123,18 @@ def get_ref_ax(
 
 
 def make_report(ds: xr.Dataset, fname: str):
-
     t_short = ["09:00", "10:00", "12:00", "14:00", "16:00"]
     t_long = [f"1967-08-16T{t}" for t in t_short]
     ds = ds.sel(time=t_long)
 
+    # Single value validation
+    zi = ds["zh"].isel(zh=ds["w_thv"].argmin("zh"))  # tab 1 caption
+    w_thv_s = ds["mo_w_thv"]
+    R = ds["w_thv"].sel(zh=zi) / w_thv_s  # m, tab 1 caption
+    w_st = (consts.g / ds.attrs["th_ref"] * w_thv_s * zi) ** (1 / 3)  # m/s, tab 1 caption
+
     # Prepare 1400 TKE budget
-    # w_st = (consts.g / thv_mean * w_thv * zi) ** (1 / 3)
+    tke_scale = w_st**3 / zi
 
     with BaseReport(title="GABLS1 Validation", path=fname) as r:
         r.add_text("This report compares the jax-scm model against Wangara Day 33 reference results from NN09.")
@@ -222,8 +228,33 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.legend()
         r.add_mpl_fig(fig, caption="MYNN length scale over time")
 
+        # Table 1
+        def _annotate_scatter(ax: plt.Axes, label: str):
+            # 1:1 line
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            vmin = min(xmin, ymin)
+            vmax = max(xmax, ymax)
+            ax.plot([vmin, vmax], [vmin, vmax], "k--")
 
-if __name__ == "__main__":
+            # Annotate axis
+            ax.set_xlabel(f"Ref {label}")
+            ax.set_ylabel(f"jax-scm {label}")
+
+        df = pd.read_csv("ref/nn09_tab1.csv")
+
+        fig, (ax1, ax2, ax3) = plt.subplots(ncols=3, figsize=(6, 2), constrained_layout=True)
+        c = np.linspace(0, 1, len(df))
+        ax1.scatter(df["neg_R"], -R[1:], c=c)
+        _annotate_scatter(ax1, "-R, -")
+        ax2.scatter(df["zi"], zi[1:], c=c)
+        _annotate_scatter(ax2, "zi, m")
+        ax3.scatter(df["w_st"], w_st[1:], c=c)
+        _annotate_scatter(ax3, "w_st, m/s")
+        r.add_mpl_fig(fig, caption="Mixed layer parameters")
+
+
+def run():
     sim = get_wangara_33(Nz=100)
     cfg = load_namelist("namelist_cn.yaml")
     model = init_model(sim, cfg)
@@ -238,6 +269,10 @@ if __name__ == "__main__":
         ),
     )
     ds.to_netcdf("wangara_day33.nc")
+
+
+if __name__ == "__main__":
+    # run()
 
     ds = xr.open_dataset("wangara_day33.nc")
     make_report(ds, "report.html")
