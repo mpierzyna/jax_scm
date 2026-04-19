@@ -19,6 +19,7 @@ from scm.mynn.interfaces import ProgVarsMYNN
 from scm.mynn.model import init_model
 from scm.reporter import BaseReport
 from scm.time_stepping import simulate
+from scm import consts
 
 plot_kwargs = {
     "color": "C1",
@@ -40,6 +41,10 @@ def get_wangara_33(Nz: int = 50) -> Simulation:
     th = convert.tk_to_th(tk=tk, p_hPa=p_hPa)
     th = np.interp(grid.z, df["z"], th)  # Interpolate to model grid
 
+    r = df["r"] / 1000  # kg/kg
+    qv = r / (1 + r)
+    qv = np.interp(grid.z, df["z"], qv)
+
     u = np.interp(grid.z, df["z"], df["u"])
     v = np.interp(grid.z, df["z"], df["v"])
 
@@ -48,7 +53,7 @@ def get_wangara_33(Nz: int = 50) -> Simulation:
         v=jnp.array(v),
         th=jnp.array(th),
         qke=0.01 * jnp.ones_like(th),  # small initial turbulence
-        qv=jnp.zeros_like(th),  # No initial moisture
+        qv=jnp.array(qv),
     )
 
     ## Forcing
@@ -122,6 +127,9 @@ def make_report(ds: xr.Dataset, fname: str):
     t_long = [f"1967-08-16T{t}" for t in t_short]
     ds = ds.sel(time=t_long)
 
+    # Prepare 1400 TKE budget
+    # w_st = (consts.g / thv_mean * w_thv * zi) ** (1 / 3)
+
     with BaseReport(title="GABLS1 Validation", path=fname) as r:
         r.add_text("This report compares the jax-scm model against Wangara Day 33 reference results from NN09.")
 
@@ -138,7 +146,6 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.set_xlabel("Pot. temp, C")
         ax.set_ylabel("Height, m")
         ax.legend()
-        fig.show()
         r.add_mpl_fig(fig, caption="Potential temperature over time.")
 
         # Heatflux
@@ -154,41 +161,7 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.set_xlabel("Sensible heat flux, K m / s")
         ax.set_ylabel("Height, m")
         ax.legend()
-        fig.show()
         r.add_mpl_fig(fig, caption="Sensible heat flux over time")
-
-        # TKE
-        fig, ax = get_ref_ax(
-            "ref/nn09_fig5.png",
-            (0, 3),
-            (-50, 2050),
-            trim=(678, 117, 43, 16),  # left, bottom, right, top
-            figsize=(3, 5),
-        )
-        for i in range(1, 5):
-            ax.plot(ds["qke"].isel(time=i) / 2, ds["z"], label=t_short[i], color=f"C{i}")
-        ax.set_xlabel("TKE, m^2/s^2")
-        ax.set_ylabel("Height, m")
-        ax.legend()
-        fig.show()
-        r.add_mpl_fig(fig, caption="Turbulent kinetic energy over time")
-
-        # Length scale
-        fig, ax = get_ref_ax(
-            "ref/nn09_fig7.png",
-            (0, 250),
-            (-50, 2050),
-            trim=(725, 125, 30, 14),  # left, bottom, right, top
-            figsize=(3, 5),
-        )
-        for i in range(1, 5):
-            ax.plot(ds["L"].isel(time=i), ds["zh"], label=t_short[i], color=f"C{i}")
-        ax.set_xlabel("Length scale, m")
-        ax.set_ylabel("Height, m")
-        ax.legend()
-        fig.show()
-        r.add_mpl_fig(fig, caption="MYNN length scale over time")
-
         # Water vapor
         fig, ax = get_ref_ax(
             "ref/nn09_fig8.png",
@@ -202,7 +175,6 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.set_xlabel("Water vapor, g/kg")
         ax.set_ylabel("Height, m")
         ax.legend()
-        fig.show()
         r.add_mpl_fig(fig, caption="Water vapor over time")
 
         # Moisture flux
@@ -218,25 +190,54 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.set_xlabel("Moisture flux, g/kg")
         ax.set_ylabel("Height, m")
         ax.legend()
-        fig.show()
         r.add_mpl_fig(fig, caption="Moisture flux over time")
+
+        # TKE
+        fig, ax = get_ref_ax(
+            "ref/nn09_fig5.png",
+            (0, 3),
+            (-50, 2050),
+            trim=(678, 117, 43, 16),  # left, bottom, right, top
+            figsize=(3, 5),
+        )
+        for i in range(1, 5):
+            ax.plot(ds["qke"].isel(time=i) / 2, ds["z"], label=t_short[i], color=f"C{i}")
+        ax.set_xlabel("TKE, m^2/s^2")
+        ax.set_ylabel("Height, m")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Turbulent kinetic energy over time")
+
+        # Length scale
+        fig, ax = get_ref_ax(
+            "ref/nn09_fig7.png",
+            (0, 250),
+            (-50, 2050),
+            trim=(725, 125, 30, 14),  # left, bottom, right, top
+            figsize=(3, 5),
+        )
+        for i in range(1, 5):
+            ax.plot(ds["L"].isel(time=i), ds["zh"], label=t_short[i], color=f"C{i}")
+        ax.set_xlabel("Length scale, m")
+        ax.set_ylabel("Height, m")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="MYNN length scale over time")
 
 
 if __name__ == "__main__":
-    # sim = get_wangara_33()
-    # cfg = load_namelist("namelist_cn.yaml")
-    # model = init_model(sim, cfg)
-    # out = simulate(model=model, sim=sim, cfg=cfg)
-    # ds = out_to_ds(
-    #     out,
-    #     sim,
-    #     time=pd.date_range(
-    #         "1967-08-16T09:00",
-    #         freq=f"{cfg.dt_s_out:.0f}s",
-    #         periods=out.n_steps,
-    #     ),
-    # )
-    # ds.to_netcdf("wangara_day33.nc")
+    sim = get_wangara_33(Nz=100)
+    cfg = load_namelist("namelist_cn.yaml")
+    model = init_model(sim, cfg)
+    out = simulate(model=model, sim=sim, cfg=cfg)
+    ds = out_to_ds(
+        out,
+        sim,
+        time=pd.date_range(
+            "1967-08-16T09:00",
+            freq=f"{cfg.dt_s_out:.0f}s",
+            periods=out.n_steps,
+        ),
+    )
+    ds.to_netcdf("wangara_day33.nc")
 
     ds = xr.open_dataset("wangara_day33.nc")
     make_report(ds, "report.html")
