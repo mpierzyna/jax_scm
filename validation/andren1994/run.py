@@ -18,14 +18,45 @@ from scm.mynn.model import init_model
 from scm.reporter import BaseReport
 from scm.time_stepping import simulate
 from scm import consts
-from scm import convert
+
+
+plot_kwargs = {
+    "color": "C1",
+    "linewidth": 2,
+    "label": "jax-scm",
+}
+
+scatter_kwargs = {
+    "color": "C1",
+    "s": 10,
+    "label": "jax-scm",
+    "zorder": 5,
+}
+
+
+def get_ref_ax(
+    img_path: str,
+    x_lims: Tuple[float, float],
+    y_lims: Tuple[float, float],
+    trim: Tuple[int, int, int, int] | None = None,
+    rot_deg: float = 0,
+) -> Tuple[plt.Figure, plt.Axes]:
+    img = Image.open(img_path)
+    if rot_deg != 0:
+        img = img.rotate(rot_deg, expand=True)
+    if trim is not None:
+        w, h = img.size
+        left, bottom, right, top = trim
+        img = img.crop((left, top, w - right, h - bottom))
+
+    fig, ax = plt.subplots()
+    ax.imshow(img, extent=(*x_lims, *y_lims), aspect="auto")
+    return fig, ax
 
 
 def get_a94(Nz: int = 40) -> Simulation:
-    ## Grid
     grid = StaggeredGrid(Nz=Nz, H=1500)
 
-    ## Forcing
     f_c = convert.get_fc(lat_deg=45)
     u_g = jnp.ones(Nz) * 10
     v_g = jnp.zeros(Nz)
@@ -40,7 +71,6 @@ def get_a94(Nz: int = 40) -> Simulation:
         dth_dz_top=0.0,
     )
 
-    ## Initial conditions
     df = pd.read_csv("ref/andren94_tab_A1.csv")
     u = jnp.interp(grid.z, df["z"].values, df["u"].values)
     v = jnp.interp(grid.z, df["z"].values, df["v"].values)
@@ -48,8 +78,8 @@ def get_a94(Nz: int = 40) -> Simulation:
     init = ProgVarsMYNN(
         u=u,
         v=v,
-        th=jnp.ones(Nz) * 273.15,  # neutral
-        qv=jnp.zeros(Nz),  # neutral
+        th=jnp.ones(Nz) * 273.15,
+        qv=jnp.zeros(Nz),
         qke=qke,
     )
 
@@ -66,7 +96,7 @@ def get_a94(Nz: int = 40) -> Simulation:
 
 
 def run():
-    sim = get_a94()
+    sim = get_a94(Nz=100)
     cfg = load_namelist("namelist_cn.yaml")
     model = init_model(sim, cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
@@ -76,62 +106,124 @@ def run():
 
 def make_report(ds: xr.Dataset):
     f = ds["frc_f_c"].item()
-    tf = ds["time"] * f  # normalized time
+    tf = ds["time"] * f
 
-    ## Fig 3: Steady-state deviation
-    uw0 = ds["mo_u_w"]
-    C_u = -f / uw0 * np.trapezoid(y=ds["v"] - ds["frc_v_geo"], x=ds["z"])
+    with BaseReport(title="Andren 1994 Validation", path="report.html") as r:
+        r.add_text("Comparison of jax-scm against Andren et al. (1994) neutral Ekman layer LES reference results.")
 
-    vw0 = ds["mo_v_w"]
-    C_v = f / vw0 * np.trapezoid(y=ds["u"] - ds["frc_u_geo"], x=ds["z"])
+        # Fig 2: Normalized vertically integrated TKE
+        tke_int = np.trapezoid(y=ds["qke"] / 2, x=ds["z"])
+        tke_norm = f / ds["mo_u_st"] ** 3 * tke_int
 
-    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(6, 3))
-    ax1.plot(tf, C_u)
-    ax1.set_xlabel("t f")
-    ax1.set_ylabel("$C_u$")
+        fig, ax = get_ref_ax(
+            "ref/a94_fig2.png",
+            x_lims=(0, 14),
+            y_lims=(0, 1.5),
+            trim=(227, 156, 207, 14),  # left bottom right top
+            rot_deg=-0.2,
+        )
+        ax.plot(tf, tke_norm, **plot_kwargs)
+        ax.set_xlabel("tf")
+        ax.set_ylabel(r"$f \int q^2/2 \, dz \; / \; u_*^3$")
+        ax.set_yticks(np.arange(0, 1.6, 0.25))
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Fig 2: Normalized vertically integrated TKE")
 
-    ax2.plot(tf, C_v)
-    ax2.set_xlabel("t f")
-    ax2.set_ylabel("$C_v$")
-    fig.show()
+        # Fig 3a: C_u deviation from steady state
+        uw0 = ds["mo_u_w"]
+        C_u = -f / uw0 * np.trapezoid(y=ds["v"] - ds["frc_v_geo"], x=ds["z"])
 
-    ## Fig 2: Integrated normalized TKE
-    tke_int = np.trapezoid(y=ds["qke"] / 2, x=ds["z"])
-    tke_norm = f / ds["mo_u_st"] ** 3 * tke_int
+        fig, ax = get_ref_ax(
+            "ref/a94_fig3a.png",
+            x_lims=(0, 14),
+            y_lims=(0, 2),
+            trim=(92, 106, 50, 19),  # left bottom right top
+            rot_deg=0.2,
+        )
+        ax.plot(tf, C_u, **plot_kwargs)
+        ax.set_xlabel("tf")
+        ax.set_ylabel(r"$C_u$")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Fig 3a: C_u deviation from steady state (x-momentum)")
 
-    fig, ax = plt.subplots()
-    ax.plot(tf, tke_norm)
-    ax.set_xlabel("t f")
-    ax.set_ylabel("f / u_*^3 * int(tke dz)")
-    fig.show()
+        # Fig 3b: C_v deviation from steady state
+        vw0 = ds["mo_v_w"]
+        C_v = f / vw0 * np.trapezoid(y=ds["u"] - ds["frc_u_geo"], x=ds["z"])
 
-    ## Subset for statistics
-    ds_sub = ds.sel(time=slice(7 / f, None))  # "last 3/f are used for statistics" (Andren 1994)
-    ds_sub = ds_sub.mean("time")
+        fig, ax = get_ref_ax(
+            "ref/a94_fig3b.png",
+            x_lims=(0, 14),
+            y_lims=(0, 3),
+            trim=(247, 177, 217, 21),  # left bottom right top
+        )
+        ax.plot(tf, C_v, **plot_kwargs)
+        ax.set_xlabel("tf")
+        ax.set_ylim(0, 3)
+        ax.set_ylabel(r"$C_v$")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Fig 3b: C_v deviation from steady state (y-momentum)")
 
-    ## Fig 6: Momentum flux profiles
-    zh_norm = ds_sub["zh"] * f / ds_sub["mo_u_st"]
-    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(6, 3), sharey="row")
-    ax1.scatter(ds_sub["u_w"] / ds_sub["mo_u_st"] ** 2, zh_norm)
-    ax2.scatter(ds_sub["v_w"] / ds_sub["mo_u_st"] ** 2, zh_norm)
-    fig.show()
+        # Time-averaged statistics over last 3/f (Andren 1994)
+        ds_sub = ds.sel(time=slice(7 / f, None)).mean("time")
+        u_st = float(ds_sub["mo_u_st"])
+        zh_norm = ds_sub["zh"] * f / u_st
+        z_norm = ds_sub["z"] * f / u_st
 
-    ## Fig 4: SL gradients
-    du_dz = np.gradient(ds_sub["u"], ds_sub["z"])
-    dv_dz = np.gradient(ds_sub["v"], ds_sub["z"])
-    phi_m = consts.kappa * ds_sub["z"] / ds_sub["mo_u_st"] * np.sqrt(du_dz**2 + dv_dz**2)
-    z_norm = ds_sub["z"] * f / ds_sub["mo_u_st"]
+        # Fig 4a: Surface layer phi_m gradient function
+        du_dz = np.gradient(ds_sub["u"], ds_sub["z"])
+        dv_dz = np.gradient(ds_sub["v"], ds_sub["z"])
+        phi_m = consts.kappa * ds_sub["z"] / u_st * np.sqrt(du_dz**2 + dv_dz**2)
 
-    fig, ax = plt.subplots()
-    ax.scatter(phi_m, z_norm)
-    ax.set_ylim(0, 0.1)
-    ax.axvline(1, color="k", ls="--")
-    fig.show()
+        fig, ax = get_ref_ax(
+            "ref/a94_fig4a.png",
+            x_lims=(0, 2),
+            y_lims=(0, 0.1),
+            trim=(100, 92, 68, 20),  # left bottom right top
+            rot_deg=-0.2,
+        )
+        ax.scatter(phi_m, z_norm, **scatter_kwargs)
+        ax.axvline(1, color="k", ls="--", lw=1)
+        ax.set_ylim(0, 0.1)
+        ax.set_xlabel(r"$\Phi_M$")
+        ax.set_ylabel(r"$zf/u_*$")
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Fig 4a: Phi_M gradient function in the surface layer")
 
-    return
+        # Fig 6a: Normalized u-momentum flux profile
+        uw_norm = ds_sub["u_w"] / u_st**2
+
+        fig, ax = get_ref_ax(
+            "ref/a94_fig6a.png",
+            x_lims=(-1, 0.2),
+            y_lims=(0, 0.35),
+            trim=(133, 82, 53, 25),  # left bottom right top
+        )
+        ax.scatter(uw_norm, zh_norm, **scatter_kwargs)
+        ax.set_xlabel(r"$\overline{uw}/u_*^2$")
+        ax.set_ylabel(r"$zf/u_*$")
+        ax.set_ylim(0, 0.35)
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Fig 6a: Normalized u-momentum flux profile")
+
+        # Fig 6b: Normalized v-momentum flux profile
+        vw_norm = ds_sub["v_w"] / u_st**2
+
+        fig, ax = get_ref_ax(
+            "ref/a94_fig6b.png",
+            x_lims=(-0.7, 0.3),
+            y_lims=(0, 0.35),
+            trim=(300, 170, 237, 23),  # left bottom right top
+        )
+        ax.scatter(vw_norm, zh_norm, **scatter_kwargs)
+        ax.set_xlabel(r"$\overline{vw}/u_*^2$")
+        ax.set_ylabel(r"$zf/u_*$")
+        ax.set_ylim(0, 0.35)
+        ax.legend()
+        r.add_mpl_fig(fig, caption="Fig 6b: Normalized v-momentum flux profile")
 
 
 if __name__ == "__main__":
-    # run()
+    run()
+
     ds = xr.open_dataset("andren1994.nc")
     make_report(ds)
