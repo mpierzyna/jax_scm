@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -223,7 +224,8 @@ def make_report(ds: xr.Dataset):
 
 
 if __name__ == "__main__":
-    run()
+    with jax.enable_x64():
+        run()
 
     ds = xr.open_dataset("andren1994.nc")
     make_report(ds)

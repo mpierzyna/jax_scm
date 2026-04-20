@@ -98,6 +98,13 @@ def init_closure(grid: StaggeredGrid, th_ref: float) -> ClosureFn:
         # Final length scale
         L = (1 / L_S + 1 / L_T + 1 / L_B) ** -1
 
+        # 1-2-1 filter to suppress vertical oscillations driven by L_B = q/N amplifying
+        # numerical noise in qke above the BL. Filtering L upstream makes Km/Kh smooth too.
+        # "reflect" padding at boundaries: top value becomes (L[-2]+L[-1])/2, more effective
+        # at damping oscillations there than edge padding which weights L[-1] at 3/4.
+        L_padded = jnp.pad(L, 1, mode="reflect")
+        L = (L_padded[:-2] + 2 * L_padded[1:-1] + L_padded[2:]) / 4
+
         # todo: check what this does
         G_M = L**2 / q**2 * (grads.u**2 + grads.v**2)  # eq 39, NN09
         # G_H = -(L**2) / q**2 * consts.g / th_0 * (beta_th * grads.th_l + beta_q * grads.q_w)  # eq 40, NN09
@@ -152,19 +159,21 @@ def init_closure(grid: StaggeredGrid, th_ref: float) -> ClosureFn:
 
         SM = SM25
         SH = SH25
+
+        # 1-2-1 filter on stability functions to suppress oscillations from noisy velocity
+        # and temperature gradients. Filtering here propagates smooth values into all three
+        # diffusivities (Km, Kh, Kq) consistently, including the QKE transport term.
+        SM_padded = jnp.pad(SM, 1, mode="reflect")
+        SM = (SM_padded[:-2] + 2 * SM_padded[1:-1] + SM_padded[2:]) / 4
+        SH_padded = jnp.pad(SH, 1, mode="reflect")
+        SH = (SH_padded[:-2] + 2 * SH_padded[1:-1] + SH_padded[2:]) / 4
+
         Sq = 3 * SM  # eq 67, NN09
 
         # Eddy diffusivities
         Km = L * q * SM
         Kh = L * q * SH
         Kq = L * q * Sq  # QKE turbulent transport diffusivity (eq 24, MY82 variant)
-
-        # Simple 1-2-1 filter to dampen vertical oscillations
-        # todo: find reference for this
-        Km_padded = jnp.pad(Km, 1, mode="edge")
-        Km = (Km_padded[:-2] + 2 * Km_padded[1:-1] + Km_padded[2:]) / 4
-        Kh_padded = jnp.pad(Kh, 1, mode="edge")
-        Kh = (Kh_padded[:-2] + 2 * Kh_padded[1:-1] + Kh_padded[2:]) / 4
 
         # Parameterized fluxes
         u_w = -Km * grads.u  # eq. 18, NN09
@@ -219,9 +228,9 @@ def init_closure(grid: StaggeredGrid, th_ref: float) -> ClosureFn:
             Kh=Kh,
             Kq=Kq,
             w_qke=w_qke,
-            qke_P_S=P_S,
-            qke_P_B=P_B,
-            qke_eps=eps,
+            qke_P_S=2 * P_S,  # returned as QKE, so 2*TKE
+            qke_P_B=2 * P_B,  # returned as QKE, so 2*TKE
+            qke_eps=2 * eps,  # returned as QKE, so 2*TKE
             ct2=ct2,
         )
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pathlib
+
+import jax
 import xarray as xr
 from typing import Tuple
 
@@ -187,5 +189,6 @@ def run(cfg: Namelist, name: str):
 
 
 if __name__ == "__main__":
-    run(cfg=load_namelist("namelist_cn.yaml"), name="cn")
-    run(cfg=load_namelist("namelist_ab2.yaml"), name="ab2")
+    with jax.enable_x64():
+        run(cfg=load_namelist("namelist_cn.yaml"), name="cn")
+        run(cfg=load_namelist("namelist_ab2.yaml"), name="ab2")
