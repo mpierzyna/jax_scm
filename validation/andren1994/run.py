@@ -108,9 +108,10 @@ def run():
 def make_report(ds: xr.Dataset):
     f = ds["frc_f_c"].item()
     tf = ds["time"] * f
+    mo_settings = MOSettings.deserialize(ds.attrs["mo_settings"])
 
     with BaseReport(title="Andren 1994 Validation", path="report.html") as r:
-        r.add_text("Comparison of jax-scm against Andren et al. (1994) neutral Ekman layer LES reference results.")
+        r.add_text("Comparison of jax-scm against Andren et al. (1994) for neutral boundary layer.")
 
         # Fig 2: Normalized vertically integrated TKE
         tke_int = np.trapezoid(y=ds["qke"] / 2, x=ds["z"])
@@ -167,13 +168,21 @@ def make_report(ds: xr.Dataset):
         # Time-averaged statistics over last 3/f (Andren 1994)
         ds_sub = ds.sel(time=slice(7 / f, None)).mean("time")
         u_st = float(ds_sub["mo_u_st"])
-        zh_norm = ds_sub["zh"] * f / u_st
-        z_norm = ds_sub["z"] * f / u_st
 
         # Fig 4a: Surface layer phi_m gradient function
-        du_dz = np.gradient(ds_sub["u"], ds_sub["z"])
-        dv_dz = np.gradient(ds_sub["v"], ds_sub["z"])
-        phi_m = consts.kappa * ds_sub["z"] / u_st * np.sqrt(du_dz**2 + dv_dz**2)
+        # Add u=v=0 at roughness height for better gradient calculation near the surface
+        u = ds_sub["u"].values
+        u = np.insert(u, 0, 0)
+        v = ds_sub["v"].values
+        v = np.insert(v, 0, 0)
+        z = ds_sub["z"].values
+        z = np.insert(z, 0, mo_settings.z0h)
+        zh = np.diff(z) / np.log(z[1:] / z[:-1])  # log-mean height: correct for log-law profiles near surface
+
+        dz = np.diff(z)
+        du_dz = (u[1:] - u[:-1]) / dz
+        dv_dz = (v[1:] - v[:-1]) / dz
+        phi_m = consts.kappa * zh / u_st * np.sqrt(du_dz**2 + dv_dz**2)
 
         fig, ax = get_ref_ax(
             "ref/a94_fig4a.png",
@@ -182,7 +191,7 @@ def make_report(ds: xr.Dataset):
             trim=(100, 92, 68, 20),  # left bottom right top
             rot_deg=-0.2,
         )
-        ax.scatter(phi_m, z_norm, **scatter_kwargs)
+        ax.scatter(phi_m, zh * f / u_st, **scatter_kwargs)
         ax.axvline(1, color="k", ls="--", lw=1)
         ax.set_ylim(0, 0.1)
         ax.set_xlabel(r"$\Phi_M$")
@@ -191,6 +200,7 @@ def make_report(ds: xr.Dataset):
         r.add_mpl_fig(fig, caption="Fig 4a: Phi_M gradient function in the surface layer")
 
         # Fig 6a: Normalized u-momentum flux profile
+        zh_norm = ds_sub["zh"] * f / u_st
         uw_norm = ds_sub["u_w"] / u_st**2
 
         fig, ax = get_ref_ax(
@@ -224,8 +234,8 @@ def make_report(ds: xr.Dataset):
 
 
 if __name__ == "__main__":
-    with jax.enable_x64():
-        run()
+    # with jax.enable_x64():
+    #     run()
 
     ds = xr.open_dataset("andren1994.nc")
     make_report(ds)
