@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,7 +16,7 @@ from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, Forcing
 from scm.io.local import out_to_ds
 from scm.mo import MOSettings
-from scm.mynn.interfaces import ProgVarsMYNN
+from scm.mynn.interfaces import ProgVarsMYNN, MYNNParams
 from scm.mynn.model import init_model
 from scm.reporter import BaseReport
 from scm.time_stepping import simulate
@@ -35,6 +36,10 @@ def get_wangara_33(Nz: int = 50) -> Simulation:
     ## Grid
     grid = StaggeredGrid(H=2000, Nz=Nz)
 
+    ## Surface and model parameters — defined early so they can be reused below
+    mo_settings = MOSettings(z0m=0.01, z0h=0.01)  # Wangara site: flat open paddock, ~0.01 m
+    params = MYNNParams()
+
     ## Initial conditions
     df = pd.read_csv("ref/day33_0900.csv")
     tk = df["tc"] + 273.15  # Convert to K
@@ -49,12 +54,17 @@ def get_wangara_33(Nz: int = 50) -> Simulation:
     u = np.interp(grid.z, df["z"], df["u"])
     v = np.interp(grid.z, df["z"], df["v"])
 
+    # Estimate surface TKE from initial wind via neutral log-law, then decay exponentially.
+    u_st_est = np.sqrt(u[0] ** 2 + v[0] ** 2) * consts.kappa / np.log(grid.z[0] / mo_settings.z0m)
+    qke_sfc_est = params.B1 ** (2 / 3) * u_st_est**2
+    qke_init = np.maximum(qke_sfc_est * np.exp(-grid.z / 100.0), consts.qke_min)
+
     init = ProgVarsMYNN(
         u=jnp.array(u),
         v=jnp.array(v),
         th=jnp.array(th),
-        qke=0.01 * jnp.ones_like(th),  # small initial turbulence
         qv=jnp.array(qv),
+        qke=jnp.array(qke_init),
     )
 
     ## Forcing
@@ -86,7 +96,7 @@ def get_wangara_33(Nz: int = 50) -> Simulation:
         init=init,
         forcing=forcing,
         th_ref=277.0,  # Pot. temp. close to surface from soundings
-        mo_settings=MOSettings(z0m=0.1, z0h=0.1),  # todo: check if agrees with paper
+        mo_settings=mo_settings,
         t_start_s=9 * 3600,
         t_end_s=16 * 3600,
     )
@@ -135,11 +145,16 @@ def make_report(ds: xr.Dataset, fname: str):
     w_st = (consts.g / ds.attrs["th_ref"] * w_thv_s * zi) ** (1 / 3)  # m/s, tab 1 caption
 
     # Prepare 1400 TKE budget
-    tke_scale = w_st**3 / zi / 2  # div by two for qke -> tke
+    tke_scale = 2 * w_st**3 / zi  # qke_P_S/B/eps are in QKE (=2*TKE) units; divide by 2 for TKE normalization
     tke_P_S = (ds["qke_P_S"] / tke_scale).sel(time=t_1400)
     tke_P_B = (ds["qke_P_B"] / tke_scale).sel(time=t_1400)
     tke_eps = (ds["qke_eps"] / tke_scale).sel(time=t_1400)
-    w_tke = (ds["w_qke"] / tke_scale).sel(time=t_1400)
+
+    # Transport term: divergence of q² flux, normalized by tke_scale.
+    # w_qke is the q²=2*TKE flux; tke_scale already carries the factor of 2,
+    # so ∂w_qke/∂z / tke_scale = ∂w_TKE/∂z / (w_st³/zi) — no extra /2 needed.
+    div_w_tke = ds["w_qke"].diff("zh") / ds["zh"].diff("zh")
+    div_w_tke = (div_w_tke / tke_scale).sel(time=t_1400)
 
     with BaseReport(title="GABLS1 Validation", path=fname) as r:
         r.add_text("This report compares the jax-scm model against Wangara Day 33 reference results from NN09.")
@@ -228,10 +243,9 @@ def make_report(ds: xr.Dataset, fname: str):
         )
         ax.plot(tke_P_S, ds["z"], c="red", lw=1.5)
         ax.plot(tke_P_B, ds["z"], c="red", lw=1.5, ls="--")
-        # ax.plot(w_tke, ds["zh"])
-        ax.plot(tke_eps, ds["z"], c="red", lw=1.5, ls="-.")  # todo: wrong sign!
+        ax.plot(div_w_tke.values, ds["z"].values, c="red", lw=1.5, ls=":")
+        ax.plot(-tke_eps, ds["z"], c="red", lw=1.5, ls="-.")  # here negative because sink
         ax.set_xlim(-1, 1)
-        fig.show()
         r.add_mpl_fig(fig, caption="TKE budget at 14:00")
 
         # Length scale
@@ -293,6 +307,8 @@ def run():
 
 
 if __name__ == "__main__":
+    # with jax.enable_x64():
+    #     run()
     # run()
 
     ds = xr.open_dataset("wangara_day33.nc")
