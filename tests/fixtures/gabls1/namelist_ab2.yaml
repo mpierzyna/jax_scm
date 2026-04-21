@@ -1,0 +1,6 @@
+time_int: "explicit"
+adaptive_timestep:
+    cfl_max: 0.025
+    dt_s_max: 10.0
+dt_s: 0.01
+dt_s_max: 1.0

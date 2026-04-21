@@ -1,3 +1,4 @@
+import jax
 import pytest
 import xarray as xr
 
@@ -24,11 +25,11 @@ def test_e2e(case: str) -> None:
     cfg = load_namelist(FIXTURE_ROOT / "gabls1" / sim_cfg)
 
     # Run simulation again
-    # sim = sim_from_ds(ds)  # do not load from disk right now because something wrong
-    sim = get_gabls1(Nz=64)
-    model = init_model(sim, cfg=cfg)
-    out = simulate(model=model, sim=sim, cfg=cfg)
-    ds_new = out_to_ds(out, sim=sim, time=out.t_s / 60 / 60)
+    with jax.enable_x64():
+        sim = get_gabls1(Nz=64)
+        model = init_model(sim, cfg=cfg)
+        out = simulate(model=model, sim=sim, cfg=cfg)
+        ds_new = out_to_ds(out, sim=sim, time=out.t_s / 60 / 60)
 
     # Compare new output to original
     err = (ds - ds_new) / ds.mean()

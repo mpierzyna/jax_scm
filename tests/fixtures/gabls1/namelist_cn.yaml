@@ -1,0 +1,3 @@
+time_int: "implicit"
+dt_s: 1.0
+dt_s_out: 300.0
