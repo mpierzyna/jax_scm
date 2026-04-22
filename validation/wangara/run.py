@@ -331,4 +331,4 @@ if __name__ == "__main__":
         run()
 
     ds = xr.open_dataset("wangara_day33.nc")
-    make_report(ds, "report.html")
+    make_report(ds, "report_wangara.html")

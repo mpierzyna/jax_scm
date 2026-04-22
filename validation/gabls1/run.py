@@ -185,7 +185,7 @@ def run(cfg: Namelist, name: str):
     print("Written to disk.")
 
     # Make report
-    make_report(ds, fname=f"report_{name}.html")
+    make_report(ds, fname=f"report_gabls1_{name}.html")
 
 
 if __name__ == "__main__":

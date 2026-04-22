@@ -64,7 +64,7 @@ def make_report(ds: xr.Dataset):
     tf = ds["time"] * f
     mo_settings = MOSettings.deserialize(ds.attrs["mo_settings"])
 
-    with BaseReport(title="Andren 1994 Validation", path="report.html") as r:
+    with BaseReport(title="Andren 1994 Validation", path="report_andren1994.html") as r:
         r.add_text("Comparison of jax-scm against Andren et al. (1994) for neutral boundary layer.")
 
         # Fig 2: Normalized vertically integrated TKE
