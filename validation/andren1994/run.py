@@ -1,20 +1,15 @@
 from typing import Tuple
 
 import jax
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import xarray as xr
 
 from PIL import Image
-from scm import convert
 from scm.config import load_namelist
-from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, Forcing
+from scm.examples.andren1994.andren1994 import get_andren1994
 from scm.io.local import out_to_ds
 from scm.mo import MOSettings
-from scm.mynn.interfaces import ProgVarsMYNN
 from scm.mynn.model import init_model
 from scm.reporter import BaseReport
 from scm.time_stepping import simulate
@@ -55,49 +50,8 @@ def get_ref_ax(
     return fig, ax
 
 
-def get_a94(Nz: int = 40) -> Simulation:
-    grid = StaggeredGrid(Nz=Nz, H=1500)
-
-    f_c = convert.get_fc(lat_deg=45)
-    u_g = jnp.ones(Nz) * 10
-    v_g = jnp.zeros(Nz)
-    mo_settings = MOSettings(z0h=0.1, z0m=0.1)
-
-    forcing = Forcing(
-        u_geo=lambda t_s: u_g,
-        v_geo=lambda t_s: v_g,
-        f_c=f_c,
-        w_th_s=lambda t_s: jnp.array(0.0),
-        w_qv_s=lambda t_s: jnp.array(0.0),
-        dth_dz_top=0.0,
-    )
-
-    df = pd.read_csv("ref/andren94_tab_A1.csv")
-    u = jnp.interp(grid.z, df["z"].values, df["u"].values)
-    v = jnp.interp(grid.z, df["z"].values, df["v"].values)
-    qke = jnp.interp(grid.z, df["z"].values, df["tke"].values) * 2
-    init = ProgVarsMYNN(
-        u=u,
-        v=v,
-        th=jnp.ones(Nz) * 273.15,
-        qv=jnp.zeros(Nz),
-        qke=qke,
-    )
-
-    return Simulation(
-        name="Andren1994",
-        init=init,
-        forcing=forcing,
-        mo_settings=mo_settings,
-        grid=grid,
-        th_ref=273.15,
-        t_start_s=0,
-        t_end_s=int(10 / f_c),
-    )
-
-
 def run():
-    sim = get_a94(Nz=100)
+    sim = get_andren1994(Nz=100)
     cfg = load_namelist("namelist_cn.yaml")
     model = init_model(sim, cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
