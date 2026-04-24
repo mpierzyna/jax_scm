@@ -7,7 +7,7 @@ from scm.config import Namelist
 from scm.interfaces import Simulation, ModelFn, Output, MYNNParams
 from scm.time_stepping.explicit import get_euler_step_fn, get_ab2_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
-from scm.time_stepping.utils import IterationTimer
+from scm.time_stepping.utils import IterationTimer, StepCarry
 
 
 def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Output:
@@ -35,27 +35,19 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
             dt = cfg.adaptive_timestep.cfl_max * sim.grid.dz**2 / K_max
             return jnp.minimum(dt, cfg.adaptive_timestep.dt_s_max)
 
-        def _step_fn(carry, t, dt_out):
+        def _step_fn(carry: StepCarry, t, dt_out):
             def _while_body(c):
-                y, prev, diag, mo, i, t_curr, t_left = c
-                dt = jnp.minimum(_get_dt(diag), t_left)  # if dt is larger than time left, take smaller step
-                y_n, prev_n, diag_n, mo_n = _ab2(t_curr, dt, y, prev, params)
-                return (
-                    y_n,
-                    prev_n,
-                    diag_n,
-                    mo_n,
-                    i + 1,
-                    t_curr + dt,  # advance current time by dt
-                    t_left - dt,  # time left for next iteration until output
-                )
+                step_carry, i, t_curr, t_left = c
+                dt = jnp.minimum(_get_dt(step_carry.diag), t_left)
+                new_carry = _ab2(step_carry, t_curr, dt, params)
+                return (new_carry, i + 1, t_curr + dt, t_left - dt)
 
-            loop_init = (*carry, 0, t.astype(float), dt_out)
+            loop_init = (carry, 0, t.astype(float), dt_out)
             loop_final = jax.lax.while_loop(lambda c: c[-1] > 0, _while_body, loop_init)
-            *new_carry, i, _, _ = loop_final
+            new_carry, i, _, _ = loop_final
             if cfg.print_advanced_status:
                 jax.debug.print("Took {i} steps", i=i)
-            return tuple(new_carry), tuple(new_carry)
+            return new_carry, new_carry
 
     else:
         # Fixed-timestep (AB2 or CN)
@@ -67,17 +59,16 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
 
         rel_t_inner = jnp.arange(0, cfg.dt_s_out, cfg.dt_s) + cfg.dt_s
 
-        def _step_fn(carry, t, dt_out):
+        def _step_fn(carry: StepCarry, t, dt_out):
             def _scan_inner(c, t_in):
-                y, prev, _, _ = c
-                return _step(t_in, cfg.dt_s, y, prev, params), None
+                return _step(c, t_in, cfg.dt_s, params), None
 
             new_carry, _ = jax.lax.scan(_scan_inner, init=carry, xs=t + rel_t_inner)
             return new_carry, new_carry
 
     # Run the simulation loop
-    jax.debug.print("Begin simulation...")  # print regardless of cfg.print_progress.
-    y1, prev0, diag0, mo0 = _warmup(t_outer[0], cfg.dt_s, sim.init, params)
+    jax.debug.print("Begin simulation...")
+    init_carry: StepCarry = _warmup(t_outer[0], cfg.dt_s, sim.init, params)
 
     def _outer_body(carry, t):
         new_carry, out = _step_fn(carry, t, cfg.dt_s_out)
@@ -85,27 +76,25 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
             jax.debug.callback(timer.callback, t + cfg.dt_s_out)
         return new_carry, out
 
-    _, history = jax.lax.scan(_outer_body, init=(y1, prev0, diag0, mo0), xs=t_outer)
+    _, history = jax.lax.scan(_outer_body, init=init_carry, xs=t_outer)
     if cfg.print_advanced_status:
         timer.finalize()
     jax.debug.print("Simulation complete.")
 
     # Assemble Output by merging the initial state with the trajectory
-    y_h, _, diag_h, mo_h = history
-
     # Initial state (t=0) as an Output object
     out0 = Output(
         state_traj=jax.tree_util.tree_map(lambda x: x[None], sim.init),
-        diag_traj=jax.tree_util.tree_map(lambda x: x[None], diag0),
-        mo_traj=jax.tree_util.tree_map(lambda x: x[None], mo0),
+        diag_traj=jax.tree_util.tree_map(lambda x: x[None], init_carry.diag),
+        mo_traj=jax.tree_util.tree_map(lambda x: x[None], init_carry.mo),
         t_s=jnp.array([sim.t_start_s]),
     )
 
     # Simulation results (t > 0) as an Output object
     out_h = Output(
-        state_traj=y_h,
-        diag_traj=diag_h,
-        mo_traj=mo_h,
+        state_traj=history.y,
+        diag_traj=history.diag,
+        mo_traj=history.mo,
         t_s=t_outer + cfg.dt_s_out,
     )
 

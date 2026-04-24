@@ -14,14 +14,38 @@ Boundary conditions
 
 Crank-Nicolson scheme (K fixed at current time step)
 -----------------------------------------------------
-    (I - dt/2 * A) φ^{n+1} = (I + dt/2 * A) φ^n + dt * S + dt * b_sfc
+    (I - dt/2 * A + dt/2 * R) φ^{n+1} = (I + dt/2 * A - dt/2 * R) φ^n + dt * S + dt * b_sfc
 
 where A is the tridiagonal diffusion matrix with coefficients (using K_eff):
     A[j, j-1] = K_eff[j] / dz²           (sub-diagonal)
     A[j,   j] = -(K_eff[j] + K_eff[j+1]) / dz²   (diagonal)
     A[j, j+1] = K_eff[j+1] / dz²         (super-diagonal)
 
-and b_sfc[0] = sfc_flux / dz,  b_sfc[j>0] = 0.
+and R = diag(decay_rate) is an optional diagonal destruction term (used for
+semi-implicit QKE dissipation) and b_sfc[0] = sfc_flux / dz,  b_sfc[j>0] = 0.
+
+Semi-implicit QKE dissipation
+------------------------------
+The dissipation term eps = q³/(B1·L) = qke^{3/2}/(B1·L) is nonlinear and can
+drive instability when the dissipation timescale τ = B1·L/(2·q) is shorter than
+the timestep.  Explicit treatment gives qke^{n+1} = qke^n·(1 - dt·r), which goes
+negative once dt > τ.
+
+To avoid this, eps is quasi-linearised: eps ≈ r·qke with the rate
+
+    r = qke_eps / qke = 2·sqrt(qke) / (B1·L_full)    [1/s]
+
+evaluated at the current step (lagged, consistent with how K is lagged).  The
+semi-implicit form qke^{n+1} = qke^n / (1 + dt·r) is unconditionally positive.
+
+Typical values: near the surface (L~5 m, q~1 m/s) τ ≈ 60 s; at the BL top
+(L~50 m, q~0.5 m/s) τ ≈ 1200 s.  The clip to qke_min in the denominator
+prevents r from blowing up when qke sits at the numerical floor.
+
+AB2 extrapolation
+-----------------
+Explicit sources S and surface fluxes (from MO) are both AB2-extrapolated from
+the two most recent time levels before being passed to the CN solve.
 """
 
 from __future__ import annotations
@@ -32,10 +56,11 @@ import jax
 import jax.numpy as jnp
 from jax.lax.linalg import tridiagonal_solve
 
+from scm import consts
 from scm.grid import StaggeredGrid
 from scm.interfaces import ModelFn
 from scm.mynn.interfaces import ProgVarsMYNN
-from scm.time_stepping.utils import clip_state
+from scm.time_stepping.utils import clip_state, StepCarry
 
 
 def get_cn_sparse_lin_system(
@@ -45,6 +70,7 @@ def get_cn_sparse_lin_system(
     dz: float,
     S: jnp.ndarray,
     sfc_flux: float | jnp.ndarray,
+    decay_rate: float | jnp.ndarray = 0.0,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Get sparse linear system for one CN diffusion step of a single variable.
 
@@ -63,17 +89,15 @@ def get_cn_sparse_lin_system(
     sfc_flux : float or scalar jnp.ndarray
         Surface flux F_sfc = -K_sfc * dφ/dz|_sfc  (sign convention: positive = upward).
         Contributes as +sfc_flux/dz to the tendency at the bottom cell.
+    decay_rate : float or jnp.ndarray, shape () or (Nz,), optional
+        Linear destruction rate r such that the implicit decay term is -r*φ.
+        Adds (dt/2)*r to the LHS diagonal and subtracts (dt/2)*r*φ from the RHS.
+        Default 0 (no implicit decay).  Used for semi-implicit QKE dissipation.
 
     Returns
     -------
-    lhs_dl : jnp.ndarray, shape (Nz,)
-        Sub-diagonal of the CN lhs matrix.
-    lhs_d : jnp.ndarray, shape (Nz,)
-        Diagonal of the CN lhs matrix.
-    lhs_du : jnp.ndarray, shape (Nz,)
-        Super-diagonal of the CN lhs matrix.
-    rhs : jnp.ndarray, shape (Nz,)
-        Right-hand side of the CN system, including explicit sources and surface flux.
+    lhs_dl, lhs_d, lhs_du, rhs : jnp.ndarray, shape (Nz,)
+        Tridiagonal system ready for ``tridiagonal_solve``.
     """
     # Zero out boundary faces so they are handled as explicit BCs, not implicit diffusion
     K_eff = K.at[0].set(0.0).at[-1].set(0.0)
@@ -85,25 +109,21 @@ def get_cn_sparse_lin_system(
     # Diagonal
     A_d = -(A_dl + A_du)  # shape (Nz,)
 
-    # Assemble tridiagonal diffusion matrix A
-    # for dense computation, leave for clarity
-    # A = jnp.diag(A_d) + jnp.diag(A_du[:-1], k=1) + jnp.diag(A_dl[1:], k=-1)
-    # I = jnp.eye(N=phi_i.shape[0])
-
     # Surface-flux explicit source: b_sfc[0] = sfc_flux / dz, zero elsewhere
     b_sfc = jnp.zeros_like(phi_i).at[0].set(sfc_flux / dz)
 
-    # lhs = I - (dt / 2.0) * A  # dense version
-    lhs_d = 1 - (dt / 2.0) * A_d
+    # CN LHS: I - dt/2 * A + dt/2 * R  (R = diag(decay_rate))
+    lhs_d = 1 - (dt / 2.0) * A_d + (dt / 2.0) * decay_rate
     lhs_dl = -(dt / 2.0) * A_dl
     lhs_du = -(dt / 2.0) * A_du
 
-    # rhs = (I + (dt / 2.0) * A) @ phi_i + dt * S + dt * b_sfc  # dense version
+    # CN RHS: (I + dt/2 * A - dt/2 * R) φ^n + dt * S + dt * b_sfc
     rhs = (
         phi_i
         + (dt / 2.0) * A_d * phi_i
         + (dt / 2.0) * A_dl * jnp.concatenate([jnp.zeros(1), phi_i[:-1]])  # phi[j-1]
         + (dt / 2.0) * A_du * jnp.concatenate([phi_i[1:], jnp.zeros(1)])  # phi[j+1]
+        - (dt / 2.0) * decay_rate * phi_i
         + dt * S
         + dt * b_sfc
     )
@@ -115,31 +135,18 @@ def get_cn_step_fn(
     model: ModelFn,
     grid: StaggeredGrid,
 ) -> Tuple[Callable, Callable]:
-    """Factory for semi-implicit Crank-Nicolson stepper (MYNN-specific).
-
-    Diffusion terms are solved implicitly with K fixed at the current time step
-    (K diagnosed from the closure and held constant within each CN step).
-    Non-diffusive explicit sources (Coriolis, QKE production/dissipation,
-    large-scale advection) use AB2 extrapolation after the warmup step.
-
-    The ``model`` **must** be initialized with ``implicit=True`` so that it
-    returns only non-diffusive tendencies as the forcing vector S.
-
-    Parameters
-    ----------
-    model : ModelFn
-        MYNN model function (initialized with ``implicit=True``).
-    grid : StaggeredGrid
-        Vertical grid (provides ``dz``).
+    """Factory for the semi-implicit Crank-Nicolson stepper (MYNN-specific).
 
     Returns
     -------
-    _cn_warmup : Callable
-        ``(t_s, dt_s, y0) -> (y1, S0, diag0, mo_res0)``
-        Warmup step: CN with S^{prev} = S^0 (first-order accurate in time).
-    _cn : Callable
-        ``(t_s, dt_s, y1, S_prev) -> (y2, S1, diag1, mo_res1)``
-        Regular CN step with AB2-extrapolated explicit sources.
+    cn_warmup : Callable
+        ``(t_s, dt_s, y0, params) -> StepCarry``
+        Builds the initial carry from a raw state.  AB2 degenerates to Euler
+        because prev_tends and prev_mo are set equal to the current-step values.
+    cn_step : Callable
+        ``(carry: StepCarry, t_s, dt_s, params) -> StepCarry``
+        Regular CN step.  AB2-extrapolates both explicit sources and MO surface
+        fluxes; treats QKE dissipation semi-implicitly on the CN diagonal.
     """
 
     def _apply_cn(
@@ -149,58 +156,54 @@ def get_cn_step_fn(
         mo_res,
         dt_s: float,
     ) -> ProgVarsMYNN:
-        """Apply one CN diffusion solve for every prognostic variable.
+        """Solve one CN step for every prognostic variable.
 
-        K values come from the diagnosed diffusivities (fixed at current step).
-        Surface BCs come from MO (treated explicitly as a source term).
+        K is fixed at the current-step value (lagged).  Surface fluxes are taken
+        from ``mo_res`` which has already been AB2-extrapolated by the caller.
+        QKE dissipation is treated semi-implicitly via the decay_rate argument.
         """
         dz = grid.dz
 
-        # Get lhs and rhs of tridiagnal system for all variables
+        # Semi-implicit QKE decay rate: r = eps/qke = qke^{1/2} / (B1 * L_full)
+        qke_decay = diag.qke_eps / jnp.clip(y.qke, min=consts.qke_min)
+
         u_sys = get_cn_sparse_lin_system(y.u, diag.Km, dt_s, dz, S.u, mo_res.u_w)
         v_sys = get_cn_sparse_lin_system(y.v, diag.Km, dt_s, dz, S.v, mo_res.v_w)
         th_sys = get_cn_sparse_lin_system(y.th, diag.Kh, dt_s, dz, S.th, mo_res.w_th)
         qv_sys = get_cn_sparse_lin_system(y.qv, diag.Kh, dt_s, dz, S.qv, mo_res.w_qv)
-
-        # todo: confirm. QKE surface FLUX is always zero. Surface QKE as BC used in closure
-        qke_sys = get_cn_sparse_lin_system(y.qke, diag.Kq, dt_s, dz, S.qke, 0.0)
+        qke_sys = get_cn_sparse_lin_system(y.qke, diag.Kq, dt_s, dz, S.qke, 0.0, decay_rate=qke_decay)
 
         # Stack to solve in batch
         lhs_dl, lhs_d, lhs_du, rhs = zip(*[u_sys, v_sys, th_sys, qv_sys, qke_sys])
-        lhs_dl = jnp.stack(lhs_dl)  # shape (5, Nz)
-        lhs_d = jnp.stack(lhs_d)  # shape (5, Nz)
-        lhs_du = jnp.stack(lhs_du)  # shape (5, Nz)
-        rhs = jnp.stack(rhs)  # shape (5, Nz)
-        rhs = rhs[:, :, None]  # shape (5, Nz, 1) for tridiagonal_solve
+        lhs_dl = jnp.stack(lhs_dl)
+        lhs_d = jnp.stack(lhs_d)
+        lhs_du = jnp.stack(lhs_du)
+        rhs = jnp.stack(rhs)[:, :, None]
 
-        # Apply tridiagonal solver
-        # Note, I thought batch solving would be faster, but no speed up.
         y_new = tridiagonal_solve(dl=lhs_dl, d=lhs_d, du=lhs_du, b=rhs).squeeze(-1)
-
         return ProgVarsMYNN(u=y_new[0], v=y_new[1], th=y_new[2], qv=y_new[3], qke=y_new[4])
 
-    def _cn_warmup(t_s, dt_s, y0, params):
-        """Warmup step: CN with S_prev = S^0 (no previous tendency stored yet).
+    def cn_warmup(t_s, dt_s, y0, params) -> StepCarry:
+        """Build initial carry from a raw state.
 
-        AB2 extrapolation degenerates to pure S^0, making this equivalent
-        to first-order-accurate forward Euler for the explicit sources.
+        Evaluates the model once and applies one CN step with AB2 degenerated to
+        Euler (prev_tends = S0, prev_mo = mo0 so the 3/2 - 1/2 = 1 cancels).
         """
-        S0, diag0, mo_res0 = model(t_s, y0, params)
-        y1 = _apply_cn(y0, S0, diag0, mo_res0, dt_s)
+        S0, diag0, mo0 = model(t_s, y0, params)
+        y1 = _apply_cn(y0, S0, diag0, mo0, dt_s)
         y1 = clip_state(y1)
-        return y1, S0, diag0, mo_res0
+        return StepCarry(y=y1, prev_tends=S0, prev_mo=mo0, diag=diag0, mo=mo0)
 
-    def _cn(t_s, dt_s, y1, S_prev, params):
-        """CN step with AB2-extrapolated non-diffusive explicit sources.
+    def cn_step(carry: StepCarry, t_s, dt_s, params) -> StepCarry:
+        """Regular CN step with AB2-extrapolated explicit sources and surface fluxes."""
+        S1, diag1, mo1 = model(t_s, carry.y, params)
 
-        Explicit sources (Coriolis, QKE budget, advection) are extrapolated
-        as S_ab2 = (3/2)*S^n - (1/2)*S^{n-1} before solving the CN system.
-        Diffusivities K are taken from the current-step closure diagnostics.
-        """
-        S1, diag1, mo_res1 = model(t_s, y1, params)
-        S_ab2 = jax.tree_util.tree_map(lambda s1, s0: (3 / 2) * s1 - (1 / 2) * s0, S1, S_prev)
-        y2 = _apply_cn(y1, S_ab2, diag1, mo_res1, dt_s)
+        # AB2-extrapolate explicit sources and MO surface fluxes to the midpoint
+        S_ab2 = jax.tree_util.tree_map(lambda s1, s0: (3 / 2) * s1 - (1 / 2) * s0, S1, carry.prev_tends)
+        mo_ab2 = jax.tree_util.tree_map(lambda a, b: (3 / 2) * a - (1 / 2) * b, mo1, carry.prev_mo)
+
+        y2 = _apply_cn(carry.y, S_ab2, diag1, mo_ab2, dt_s)
         y2 = clip_state(y2)
-        return y2, S1, diag1, mo_res1
+        return StepCarry(y=y2, prev_tends=S1, prev_mo=mo1, diag=diag1, mo=mo1)
 
-    return _cn_warmup, _cn
+    return cn_warmup, cn_step

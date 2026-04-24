@@ -57,6 +57,16 @@ class AdaptiveTimestepConfig(pydantic.BaseModel):
     cfl_max: float = 0.5  # Max CFL number for diffusion
     dt_s_max: float = 10.0  # Maximum time step, seconds
 
+    @pydantic.field_validator("cfl_max")
+    @classmethod
+    def cfl_max_stable_for_ab2(cls, v: float) -> float:
+        if v > 0.5:
+            raise ValueError(
+                f"cfl_max={v} exceeds 0.5, which is outside the AB2 stability region "
+                "for diffusion.  Use cfl_max ≤ 0.5 or switch to implicit time stepping."
+            )
+        return v
+
 
 def load_namelist(f: str | pathlib.Path) -> Namelist:
     """Load namelist from YAML file."""
