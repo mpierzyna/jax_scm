@@ -2,6 +2,9 @@
 
 JAX-SCM is a high-performance single-column model (SCM) implemented in JAX, designed for atmospheric boundary layer research. It leverages JIT compilation, automatic differentiation, and hardware acceleration (GPU/TPU) to provide a modern framework for boundary layer modeling.
 
+![coverage](docs/coverage-badge.svg)
+![tests](docs/test-badge.svg)
+
 ## Numerical and Physical Features
 
 ### Time Integration
