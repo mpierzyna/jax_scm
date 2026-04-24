@@ -63,6 +63,8 @@ class MOResult:
     v_w: jnp.ndarray  # Surface v-w stress
     dudz: jnp.ndarray  # dudz at z (=dz/2) following MOST
     dvdz: jnp.ndarray  # dvdz at z (=dz/2) following MOST
+    dthdz: jnp.ndarray  # dth/dz at z (=dz/2) following MOST
+    dqvdz: jnp.ndarray  # dqv/dz at z (=dz/2) following MOST
 
 
 class MOFunc(Protocol):
@@ -370,13 +372,14 @@ def init_mo_sfc(
         th2 = th_st * (jnp.log(2 / z0h) - psi_h_fn(zeta * (2 / z)) + psi_h_fn(zeta * (z0h / z))) / consts.kappa + th_s
         L = z / zeta
 
-        # Compute u and v gradients at z and z/2
-        # evaluate at dz/2 (first full level)
+        # Compute velocity and scalar gradients at z (=dz/2, first full level) from MOST
         dmdz = phi_m_fn(zeta) * u_st / (consts.kappa * z)
-        # evaluate at dz/4 (between first full level and surface). Not used.
-        # dmdz = phi_m_fn(zeta / 2) * u_st / (consts.kappa * z / 2)
         dudz = dmdz * u_0 / m_0
         dvdz = dmdz * v_0 / m_0
+
+        qv_st = -w_qv_s / u_st
+        dthdz = phi_h_fn(zeta) * th_st / (consts.kappa * z)
+        dqvdz = phi_h_fn(zeta) * qv_st / (consts.kappa * z)
 
         return MOResult(
             u_st=u_st,
@@ -393,6 +396,8 @@ def init_mo_sfc(
             v_w=v_w_s,
             dudz=dudz,
             dvdz=dvdz,
+            dthdz=dthdz,
+            dqvdz=dqvdz,
         )
 
     return _eval_mo

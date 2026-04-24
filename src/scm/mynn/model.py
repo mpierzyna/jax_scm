@@ -53,8 +53,8 @@ def init_model(sim: Simulation, cfg: Namelist) -> ModelFn:
         # Compute vertical gradients of state for fluxes (half levels, 1st order finite differences)
         du_dz = d_dz(u, dz=grid.dz, bot=mo_res.dudz, top=0.0)
         dv_dz = d_dz(v, dz=grid.dz, bot=mo_res.dvdz, top=0.0)
-        dth_dz = d_dz(th, dz=grid.dz, bot="edge", top=forcing.dth_dz_top)
-        dqv_dz = d_dz(qv, dz=grid.dz, bot="edge", top=0.0)  # todo: upper BC?
+        dth_dz = d_dz(th, dz=grid.dz, bot=mo_res.dthdz, top=forcing.dth_dz_top)
+        dqv_dz = d_dz(qv, dz=grid.dz, bot=mo_res.dqvdz, top=0.0)  # todo: upper BC?
 
         # QKE surface BC requires MO result; compute here for grads used in closure and ls_tends computation
         qke_sfc = get_qke_sfc(u_st=mo_res.u_st, B1=params.B1)

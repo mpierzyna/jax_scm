@@ -53,6 +53,10 @@ def mynn_state() -> Tuple[
         th_s=jnp.array(290.0),
         u_w=jnp.array(-0.1),
         v_w=jnp.array(0.0),
+        dudz=jnp.array(0.05),
+        dvdz=jnp.array(0.0),
+        dthdz=jnp.array(0.01),
+        dqvdz=jnp.array(0.0),
     )
 
     return grid, state, grads, mo_res
@@ -163,6 +167,10 @@ def test_mynn_mo_res_diffable(mynn_state):
             th_s=mo_res.th_s,
             u_w=mo_res.u_w,
             v_w=mo_res.v_w,
+            dudz=mo_res.dudz,
+            dvdz=mo_res.dvdz,
+            dthdz=mo_res.dthdz,
+            dqvdz=mo_res.dqvdz,
         )
         diag = closure_fn(state, grads, mo_res_, params)
         return jnp.mean(diag.Km) + jnp.mean(diag.u_w)

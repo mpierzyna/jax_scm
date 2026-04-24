@@ -62,8 +62,9 @@ def init_closure(grid: StaggeredGrid, th_ref: float) -> ClosureFn:
 
         # Virtual potential temperature gradient needed for buoyancy terms
         thv = conv.t_to_tv(t=state.th, qv=state.qv)
+        dthv_dz_sfc = (1 + 0.61 * state.qv[0]) * mo_res.dthdz + 0.61 * state.th[0] * mo_res.dqvdz
         dthv_dz_top = (1 + 0.61 * state.qv[-1]) * grads.th[-1] + state.th[-1] * 0.61 * grads.qv[-1]
-        dthv_dz = d_dz(thv, dz=grid.dz, bot="edge", top=dthv_dz_top)
+        dthv_dz = d_dz(thv, dz=grid.dz, bot=dthv_dz_sfc, top=dthv_dz_top)
 
         ## Length scale (all on half-levels)
         # Surface length scale (eq 53, NN09)
