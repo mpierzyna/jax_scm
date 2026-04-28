@@ -345,14 +345,19 @@ def get_era5_sim(
     w_qv = -ds["ie"] / rho
     w_qv_s_fn = get_ts_interp_fn(time_s=jnp.array(t.values), data=jnp.array(w_qv.values))
 
+    w_th = -ds["ishf"] / (rho * consts.cp)
+    w_th_fn = get_ts_interp_fn(time_s=jnp.array(t.values), data=jnp.array(w_th.values))
+
     # Coriolis parameter
-    f_c = 2 * 7.2921e-5 * jnp.sin(jnp.deg2rad(lat_deg))
+    f_c = convert.get_fc(lat_deg=abs(lat_deg))
 
     # Gather forcing in TransientForcing
+    # todo: allow switch between w_th and th_s forcing
     frc = Forcing(
         u_geo=u_geo_fn,
         v_geo=v_geo_fn,
-        th_s=t_s_fn,
+        # th_s=t_s_fn,
+        w_th_s=w_th_fn,
         w_qv_s=w_qv_s_fn,
         f_c=float(f_c),  # coriolis parameter
     )
@@ -372,7 +377,7 @@ def get_era5_sim(
         grid=grid,
         init=init,
         forcing=frc,
-        mo_settings=MOSettings(z0h=0.1, z0m=0.1),
+        mo_settings=MOSettings(z0h=0.1, z0m=0.1),  # todo: hardcoded
         th_ref=th_ref,
         t_start_s=int(t_start_s),
         t_end_s=int(t_end_s),
