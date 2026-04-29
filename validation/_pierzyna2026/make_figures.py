@@ -1,11 +1,27 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scm.examples import get_andren1994, get_wangara_day33, get_gabls1
-from scm.interfaces import Simulation
+import pathlib
+
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from scm.examples import get_andren1994, get_wangara_day33, get_gabls1
+from scm.interfaces import Simulation
 
 sns.set_palette("colorblind")
+plt.rcParams.update(
+    {
+        # "font.family": "serif",
+        "font.size": 8,
+        # "text.usetex": True,
+        # "text.latex.preamble": r"\usepackage{amsmath}",
+        "figure.dpi": 300,
+        # "figure.labelsize": 8,
+        "lines.linewidth": 0.75,
+        "hatch.linewidth": 0.5,
+    }
+)
+
 
 COLORS = {
     "u": "C0",
@@ -22,8 +38,8 @@ LABELS_PRETTY = {
     "qv": r"$q_v$",
     "qke": r"$q^2$",
     "th_s": r"$\theta_s$",
-    "w_th": r"$w'\theta'$",
-    "w_qv": r"$w'{q_v}'$",
+    "w_th": r"$\langle w \theta \rangle$",
+    "w_qv": r"$\langle w {q_v} \rangle$",
 }
 UNITS = {
     "u": "m s$^{-1}$",
@@ -35,12 +51,39 @@ UNITS = {
     "w_th": "K m s$^{-1}$",
     "w_qv": "g/kg m s$^{-1}$",
 }
+SHORT_NAMES = {
+    "Andren1994": "A94",
+    "GABLS1": "GAB1",
+    "Wangara_Day33": "WG33",
+}
+
+FIG_ROOT = pathlib.Path("figures")
 
 # Global simulation objects for plotting
 sim_a94 = get_andren1994()
 sim_gab1 = get_gabls1()
 sim_wg33 = get_wangara_day33()
 sims = [sim_a94, sim_gab1, sim_wg33]
+
+
+def _add_is_const(v: jnp.ndarray, ax: plt.Axes) -> None:
+    """Add 'constant' label if plotted variable is constant"""
+    if v.std() < 1e-5:
+        if v.mean() == 0:
+            label = "zero"
+        else:
+            label = "constant"
+
+        ax.text(
+            0.99,
+            0.99,
+            label,
+            transform=ax.transAxes,
+            ha="right",
+            va="top",
+            fontsize=6,
+            color="gray",
+        )
 
 
 def plot_ic(sim: Simulation, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
@@ -53,13 +96,16 @@ def plot_ic(sim: Simulation, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
 
     ax_uv.plot(sim.init.u, sim.grid.z, label="u", color=COLORS["u"])
     ax_uv.plot(sim.init.v, sim.grid.z, label="v", color=COLORS["v"])
+    _add_is_const(v=sim.init.u, ax=ax_uv)
     ax_uv.legend()
     ax_uv.set_xlabel(f"Wind, {UNITS['u']}")
 
     ax_th.plot(sim.init.th, sim.grid.z, label="th", color=COLORS["th"])
+    _add_is_const(v=sim.init.th, ax=ax_th)
     ax_th.set_xlabel(f"{LABELS_PRETTY['th']}, {UNITS['th']}")
 
     ax_qv.plot(sim.init.qv * 100, sim.grid.z, label="qv", color=COLORS["qv"])
+    _add_is_const(v=sim.init.qv, ax=ax_th)
     ax_qv.set_xlim(0, None)
     ax_qv.set_xlabel(f"{LABELS_PRETTY['qv']}, {UNITS['qv']}")
 
@@ -69,6 +115,9 @@ def plot_ic(sim: Simulation, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
 
     ax_uv.set_ylabel("Height, m")
     ax_uv.set_ylim(0, sim.grid.H)
+
+    for ax in (ax_th, ax_qv, ax_qke):
+        ax.tick_params(axis="y", which="both", left=False, labelleft=False)
 
 
 def plot_bc(sim: Simulation, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
@@ -87,7 +136,8 @@ def plot_bc(sim: Simulation, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
 
     # Geostrophic forcing
     ug = jax.vmap(sim.forcing.u_geo)(t)
-    pc = ax_ug.pcolormesh(t, sim.grid.z, ug.T, shading="auto", cmap="Blues")
+    pc = ax_ug.pcolormesh(t, sim.grid.z, ug.T, shading="auto", cmap="Blues", rasterized=True)
+    _add_is_const(v=ug, ax=ax_ug)
     ax_ug.set_ylabel("Height, m")
     ax_ug.set_ylim(0, sim.grid.H)
     fig.colorbar(pc, ax=ax_ug)
@@ -106,17 +156,21 @@ def plot_bc(sim: Simulation, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
 
     ax_heat.plot(t, heat, color=COLORS["th"])
     ax_heat.set_ylabel(f"{label}, {unit}")
+    ax_heat.tick_params(axis="x", which="both", bottom=False, labelbottom=False)
+    _add_is_const(v=heat, ax=ax_heat)
 
     # Moisture forcing
-    ax_w_qv.plot(t, jax.vmap(sim.forcing.w_qv_s)(t), label="w_qv", color=COLORS["qv"])
+    w_qv = jax.vmap(sim.forcing.w_qv_s)(t) * 1e3
+    ax_w_qv.plot(t, w_qv, label="w_qv", color=COLORS["qv"])
     ax_w_qv.set_xlabel("Time, s")
     ax_w_qv.set_ylabel(f"{LABELS_PRETTY['w_qv']}, {UNITS['w_qv']}")
+    _add_is_const(v=w_qv, ax=ax_w_qv)
 
 
 def plot_ic_bc(sim: Simulation) -> plt.Figure:
     """Plot initial conditions and boundary conditions for a given simulation."""
-    fig = plt.figure(constrained_layout=True, figsize=(6, 3))
-    outer_gs = fig.add_gridspec(nrows=1, ncols=2, width_ratios=(1, 1))
+    fig = plt.figure(constrained_layout=True, figsize=(4, 3))
+    outer_gs = fig.add_gridspec(nrows=2, ncols=1, height_ratios=(1, 1))
 
     plot_ic(sim, fig, outer_gs[0])
     plot_bc(sim, fig, outer_gs[1])
@@ -125,5 +179,7 @@ def plot_ic_bc(sim: Simulation) -> plt.Figure:
 
 
 if __name__ == "__main__":
-    figs = [plot_ic_bc(sim) for sim in sims]
-    plt.show()
+    for sim in sims:
+        name = SHORT_NAMES[sim.name]
+        fig_ic_bc = plot_ic_bc(sim)
+        fig_ic_bc.savefig(FIG_ROOT / f"ic_bc_{name}.pdf")
