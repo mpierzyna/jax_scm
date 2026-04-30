@@ -12,7 +12,8 @@ from scm.mynn.interfaces import ProgVarsMYNN
 def get_andren1994(Nz: int = 40) -> Simulation:
     grid = StaggeredGrid(Nz=Nz, H=1500)
 
-    f_c = convert.get_fc(lat_deg=45)
+    # f_c = convert.get_fc(lat_deg=45)
+    f_c = 1e-4
     u_g = jnp.ones(Nz) * 10
     v_g = jnp.zeros(Nz)
     mo_settings = MOSettings(z0h=0.1, z0m=0.1)

@@ -3,9 +3,10 @@ from typing import Tuple
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import xarray as xr
 
-from PIL import Image
+from scm import consts
 from scm.config import load_namelist, Namelist
 from scm.examples.andren1994.andren1994 import get_andren1994
 from scm.io.local import out_to_ds
@@ -13,8 +14,6 @@ from scm.mo import MOSettings
 from scm.mynn.model import init_model
 from scm.reporter import BaseReport
 from scm.time_stepping import simulate
-from scm import consts
-
 
 plot_kwargs = {
     "color": "C1",
@@ -30,24 +29,21 @@ scatter_kwargs = {
 }
 
 
-def get_ref_ax(
-    img_path: str,
-    x_lims: Tuple[float, float],
-    y_lims: Tuple[float, float],
-    trim: Tuple[int, int, int, int] | None = None,
-    rot_deg: float = 0,
-) -> Tuple[plt.Figure, plt.Axes]:
-    img = Image.open(img_path)
-    if rot_deg != 0:
-        img = img.rotate(rot_deg, expand=True)
-    if trim is not None:
-        w, h = img.size
-        left, bottom, right, top = trim
-        img = img.crop((left, top, w - right, h - bottom))
-
-    fig, ax = plt.subplots()
-    ax.imshow(img, extent=(*x_lims, *y_lims), aspect="auto")
-    return fig, ax
+def read_ref_csv(path: str, sort: str = "x") -> dict[str, Tuple[np.ndarray, np.ndarray]]:
+    """Read digitized reference CSV (label row, X/Y row, data...). Returns dict of label -> (x, y) sorted by y."""
+    raw = pd.read_csv(path, header=None)
+    labels = raw.iloc[0].dropna().tolist()
+    data = raw.iloc[2:].astype(float)
+    result = {}
+    for i, label in enumerate(labels):
+        x = data.iloc[:, i * 2].dropna().values
+        y = data.iloc[:, i * 2 + 1].dropna().values
+        if sort == "x":
+            order = np.argsort(x)
+        else:
+            order = np.argsort(y)
+        result[label] = (x[order], y[order])
+    return result
 
 
 def make_report(ds: xr.Dataset, fname: str):
@@ -62,17 +58,18 @@ def make_report(ds: xr.Dataset, fname: str):
         tke_int = np.trapezoid(y=ds["qke"] / 2, x=ds["z"])
         tke_norm = f / ds["mo_u_st"] ** 3 * tke_int
 
-        fig, ax = get_ref_ax(
-            "ref/a94_fig2.png",
-            x_lims=(0, 14),
-            y_lims=(0, 1.5),
-            trim=(227, 156, 207, 14),  # left bottom right top
-            rot_deg=-0.2,
-        )
+        data = read_ref_csv("ref/a94_fig2.csv")
+
+        fig, ax = plt.subplots()
+        for l, (x, y) in data.items():
+            ax.plot(x, y, label=l, color="k", lw=1)
         ax.plot(tf, tke_norm, **plot_kwargs)
+
         ax.set_xlabel("tf")
+        ax.set_xlim(0, 10)
         ax.set_ylabel(r"$f \int q^2/2 \, dz \; / \; u_*^3$")
         ax.set_yticks(np.arange(0, 1.6, 0.25))
+        ax.set_ylim(0, 1.25)
         ax.legend()
         r.add_mpl_fig(fig, caption="Fig 2: Normalized vertically integrated TKE")
 
@@ -80,16 +77,17 @@ def make_report(ds: xr.Dataset, fname: str):
         uw0 = ds["mo_u_w"]
         C_u = -f / uw0 * np.trapezoid(y=ds["v"] - ds["frc_v_geo"], x=ds["z"])
 
-        fig, ax = get_ref_ax(
-            "ref/a94_fig3a.png",
-            x_lims=(0, 14),
-            y_lims=(0, 2),
-            trim=(92, 106, 50, 19),  # left bottom right top
-            rot_deg=0.2,
-        )
+        data = read_ref_csv("ref/a94_fig3a.csv")
+
+        fig, ax = plt.subplots()
+        for l, (x, y) in data.items():
+            ax.plot(x, y, label=l, color="k", lw=1)
         ax.plot(tf, C_u, **plot_kwargs)
+
         ax.set_xlabel("tf")
+        ax.set_xlim(0, 10)
         ax.set_ylabel(r"$C_u$")
+        ax.set_ylim(0, 1.75)
         ax.legend()
         r.add_mpl_fig(fig, caption="Fig 3a: C_u deviation from steady state (x-momentum)")
 
@@ -97,16 +95,17 @@ def make_report(ds: xr.Dataset, fname: str):
         vw0 = ds["mo_v_w"]
         C_v = f / vw0 * np.trapezoid(y=ds["u"] - ds["frc_u_geo"], x=ds["z"])
 
-        fig, ax = get_ref_ax(
-            "ref/a94_fig3b.png",
-            x_lims=(0, 14),
-            y_lims=(0, 3),
-            trim=(247, 177, 217, 21),  # left bottom right top
-        )
+        data = read_ref_csv("ref/a94_fig3b.csv")
+
+        fig, ax = plt.subplots()
+        for l, (x, y) in data.items():
+            ax.plot(x, y, label=l, color="k", lw=1)
         ax.plot(tf, C_v, **plot_kwargs)
         ax.set_xlabel("tf")
+        ax.set_xlim(0, 10)
         ax.set_ylim(0, 3)
         ax.set_ylabel(r"$C_v$")
+        ax.set_ylim(0, 3)
         ax.legend()
         r.add_mpl_fig(fig, caption="Fig 3b: C_v deviation from steady state (y-momentum)")
 
@@ -129,18 +128,19 @@ def make_report(ds: xr.Dataset, fname: str):
         dv_dz = (v[1:] - v[:-1]) / dz
         phi_m = consts.kappa * zh / u_st * np.sqrt(du_dz**2 + dv_dz**2)
 
-        fig, ax = get_ref_ax(
-            "ref/a94_fig4a.png",
-            x_lims=(0, 2),
-            y_lims=(0, 0.1),
-            trim=(100, 92, 68, 20),  # left bottom right top
-            rot_deg=-0.2,
-        )
-        ax.scatter(phi_m, zh * f / u_st, **scatter_kwargs)
+        data = read_ref_csv("ref/a94_fig4a.csv", sort="y")
+
+        fig, ax = plt.subplots()
+        for l, (x, y) in data.items():
+            ax.plot(x, y, label=l, color="k", lw=1)
+        ax.plot(phi_m, zh * f / u_st, **plot_kwargs)
         ax.axvline(1, color="k", ls="--", lw=1)
-        ax.set_ylim(0, 0.1)
+
         ax.set_xlabel(r"$\Phi_M$")
+        ax.set_xlim(0, 2)
+
         ax.set_ylabel(r"$zf/u_*$")
+        ax.set_ylim(0, 0.1)
         ax.legend()
         r.add_mpl_fig(fig, caption="Fig 4a: Phi_M gradient function in the surface layer")
 
@@ -148,29 +148,33 @@ def make_report(ds: xr.Dataset, fname: str):
         zh_norm = ds_sub["zh"] * f / u_st
         uw_norm = ds_sub["u_w"] / u_st**2
 
-        fig, ax = get_ref_ax(
-            "ref/a94_fig6a.png",
-            x_lims=(-1, 0.2),
-            y_lims=(0, 0.35),
-            trim=(133, 82, 53, 25),  # left bottom right top
-        )
-        ax.scatter(uw_norm, zh_norm, **scatter_kwargs)
+        data = read_ref_csv("ref/a94_fig6a.csv", sort="y")
+
+        fig, ax = plt.subplots()
+        for l, (x, y) in data.items():
+            ax.plot(x, y, label=l, color="k", lw=1)
+        ax.plot(uw_norm, zh_norm, **plot_kwargs)
+        ax.axvline(0, color="k", ls="--", lw=1)
+
         ax.set_xlabel(r"$\overline{uw}/u_*^2$")
+
         ax.set_ylabel(r"$zf/u_*$")
         ax.set_ylim(0, 0.35)
+
         ax.legend()
         r.add_mpl_fig(fig, caption="Fig 6a: Normalized u-momentum flux profile")
 
         # Fig 6b: Normalized v-momentum flux profile
         vw_norm = ds_sub["v_w"] / u_st**2
 
-        fig, ax = get_ref_ax(
-            "ref/a94_fig6b.png",
-            x_lims=(-0.7, 0.3),
-            y_lims=(0, 0.35),
-            trim=(300, 170, 237, 23),  # left bottom right top
-        )
-        ax.scatter(vw_norm, zh_norm, **scatter_kwargs)
+        data = read_ref_csv("ref/a94_fig6b.csv", sort="y")
+
+        fig, ax = plt.subplots()
+        for l, (x, y) in data.items():
+            ax.plot(x, y, label=l, color="k", lw=1)
+        ax.plot(vw_norm, zh_norm, **plot_kwargs)
+        ax.axvline(0, color="k", ls="--", lw=1)
+
         ax.set_xlabel(r"$\overline{vw}/u_*^2$")
         ax.set_ylabel(r"$zf/u_*$")
         ax.set_ylim(0, 0.35)
@@ -186,6 +190,8 @@ def run(cfg: Namelist, name: str):
     out_file = f"out_{name}.nc"
     ds.to_netcdf(out_file)
     print(f"Written to {out_file}")
+
+    ds = xr.open_dataset(out_file)
     make_report(ds, fname=f"report_andren1994_{name}.html")
 
 
