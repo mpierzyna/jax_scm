@@ -36,7 +36,10 @@ def out_to_ds(
 
     # Create coordinates for xarray
     if time is None:
-        time = out.t_s
+        if sim.t_index_fn is not None:
+            time = sim.t_index_fn(out.t_s)
+        else:
+            time = out.t_s
     coords = {"time": time, "z": sim.grid.z, "zh": sim.grid.zh}
 
     # Convert simulation output to xarray Datasets

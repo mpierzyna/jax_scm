@@ -78,7 +78,8 @@ def get_wangara_day33(Nz: int = 50) -> Simulation:
         forcing=forcing,
         th_ref=277.0,  # Pot. temp. close to surface from soundings
         mo_settings=mo_settings,
-        t_start_s=9 * 3600,
-        t_end_s=16 * 3600,
+        t_start_s=9 * 3600,  # 9:00 local time
+        t_end_s=16 * 3600,  # 16:00 local time
+        t_index_fn=lambda t_s: pd.to_datetime("1967-08-16") + pd.to_timedelta(t_s, unit="s"),
     )
     return sim

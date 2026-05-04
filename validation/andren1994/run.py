@@ -48,7 +48,7 @@ def read_ref_csv(path: str, sort: str = "x") -> dict[str, Tuple[np.ndarray, np.n
 
 def make_report(ds: xr.Dataset, fname: str):
     f = ds["frc_f_c"].item()
-    tf = ds["time"] * f
+    tf = ds["time"]  # already in inertial periods (t_s * f_c)
     mo_settings = MOSettings.deserialize(ds.attrs["mo_settings"])
 
     with BaseReport(title="Andren 1994 Validation", path=fname) as r:
@@ -110,7 +110,7 @@ def make_report(ds: xr.Dataset, fname: str):
         r.add_mpl_fig(fig, caption="Fig 3b: C_v deviation from steady state (y-momentum)")
 
         # Time-averaged statistics over last 3/f (Andren 1994)
-        ds_sub = ds.sel(time=slice(7 / f, None)).mean("time")
+        ds_sub = ds.sel(time=slice(7.0, None)).mean("time")
         u_st = float(ds_sub["mo_u_st"])
 
         # Fig 4a: Surface layer phi_m gradient function

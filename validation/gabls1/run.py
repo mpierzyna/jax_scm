@@ -180,7 +180,7 @@ def run(cfg: Namelist, name: str):
 
     # Save output
     out_file = pathlib.Path(f"out_{name}.nc")
-    ds = out_to_ds(out=out, sim=sim, time=out.t_s / 60 / 60)
+    ds = out_to_ds(out=out, sim=sim)
     ds.to_netcdf(out_file)
     print("Written to disk.")
 

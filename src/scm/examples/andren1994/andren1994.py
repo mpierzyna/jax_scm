@@ -48,4 +48,5 @@ def get_andren1994(Nz: int = 40) -> Simulation:
         th_ref=273.15,
         t_start_s=0,
         t_end_s=int(10 / f_c),
+        t_index_fn=lambda t_s: t_s * f_c,  # inertial periods
     )

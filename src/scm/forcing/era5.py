@@ -12,7 +12,7 @@ import xarray as xr
 from scipy.interpolate import CubicSpline
 
 from scm import consts, convert
-from scm.forcing.interp import get_ts_interp_fn
+from scm.forcing.interp import get_ts_interp_fn, interp_dtindex
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, Forcing
 from scm.io import era5
@@ -203,6 +203,7 @@ def _get_sim_from_ls2d(
     z0h = ds["z0h"].mean("time").item()  # todo: implement time varying
 
     # Create simulation object
+    _dt_idx = ds.indexes["time"]
     sim = Simulation(
         name=name,
         grid=grid,
@@ -212,7 +213,7 @@ def _get_sim_from_ls2d(
         th_ref=th_ref,
         t_start_s=int(t_start_s),
         t_end_s=int(t_end_s),
-        t_index=ds.indexes["time"],
+        t_index_fn=lambda t_s: interp_dtindex(np.array(t_s), _dt_idx).round("1min"),  # todo: UNTESTED
     )
 
     return sim
@@ -372,6 +373,7 @@ def get_era5_sim(
     )
 
     # Create simulation object
+    _dt_idx = ds.indexes["time"]
     sim = Simulation(
         name=name,
         grid=grid,
@@ -381,7 +383,7 @@ def get_era5_sim(
         th_ref=th_ref,
         t_start_s=int(t_start_s),
         t_end_s=int(t_end_s),
-        t_index=ds.indexes["time"],
+        t_index_fn=lambda t_s: interp_dtindex(np.array(t_s), _dt_idx).round("1min"),  # todo: UNTESTED
     )
 
     return sim

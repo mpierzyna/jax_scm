@@ -202,15 +202,7 @@ def run(cfg: Namelist, name: str):
     sim = get_wangara_day33(Nz=100)
     model = init_model(sim, cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
-    ds = out_to_ds(
-        out,
-        sim,
-        time=pd.date_range(
-            "1967-08-16T09:00",
-            freq=f"{cfg.dt_s_out:.0f}s",
-            periods=out.n_steps,
-        ),
-    )
+    ds = out_to_ds(out, sim)
     out_file = f"out_{name}.nc"
     ds.to_netcdf(out_file)
     print(f"Written to {out_file}")

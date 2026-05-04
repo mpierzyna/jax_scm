@@ -8,7 +8,7 @@ import location. Swapping the closure scheme means updating these imports.
 from __future__ import annotations
 
 import dataclasses
-from typing import Protocol, Tuple, TypeVar
+from typing import Callable, Protocol, Tuple, TypeVar, Union
 
 import jax.numpy as jnp
 import jax.tree_util
@@ -34,7 +34,9 @@ class Simulation:
 
     t_start_s: int
     t_end_s: int
-    t_index: pd.DatetimeIndex | None = None  # Optional time index for output
+
+    # Optional function to convert time array to datatime index or scaled index for output.
+    t_index_fn: Callable[[jnp.ndarray], Union[pd.DatetimeIndex, jnp.ndarray]] | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
