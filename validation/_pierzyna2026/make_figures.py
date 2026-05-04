@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Tuple
 import pathlib
 
 import jax
@@ -47,19 +47,22 @@ LABELS_PRETTY = {
     "th": r"$\Theta$",
     "qv": r"$Q_v$",
     "qke": r"$q^2$",
+    "tke": r"$q^2/2$",
     "th_s": r"$\theta_s$",
     "w_th": r"$\langle w \theta \rangle$",
     "w_qv": r"$\langle w {q_v} \rangle$",
+    "L": "$L_M$",
 }
 UNITS = {
     "u": "m s$^{-1}$",
     "v": "m s$^{-1}$",
     "th": "K",
-    "qv": "g/kg",
+    "thC": r"$^{\circ}$C",
+    "qv": "g kg$^{-1}$",
     "qke": "m$^2$ s$^{-2}$",
     "th_s": "K",
     "w_th": "K m s$^{-1}$",
-    "w_qv": "g/kg m s$^{-1}$",
+    "w_qv": "g kg$^{-1}$ m s$^{-1}$",
 }
 
 FIG_ROOT = pathlib.Path("figures")
@@ -316,31 +319,124 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     return fig
 
 
-def plot_wg33_res(sps: SimPlotSpec) -> plt.Figure:
+def plot_wg33_res(sps: SimPlotSpec) -> Tuple[plt.Figure, plt.Figure]:
     """Plot Wangara Day 33 results against NN09 reference."""
-    t_short = ["09:00", "10:00", "12:00", "14:00", "16:00"]  # Hours to plot
-    t_long = [f"1967-08-16T{t}" for t in t_short]  # convert to full timestamps for indexing
+    t_short = ["09:00", "10:00", "12:00", "14:00", "16:00"]
+    t_long = [f"1967-08-16T{t}" for t in t_short]
     t_1400 = "1967-08-16T14:00"
 
-    # Load and select data
-    ds = xr.open_dataset(sps.out_file).sel(time=t_long)
+    ds_full = xr.open_dataset(sps.out_file)
+    ds = ds_full.sel(time=t_long)
     ds_pp = postproc_wangara(ds)
     ds_tke_budget = ds_pp.sel(time=t_1400)
 
     ref_kw = dict(ls="--", lw=0.75, alpha=0.8)
 
-    fig, axarr = plt.subplots(nrows=2, ncols=6, figsize=(12, 5), constrained_layout=True)
+    fig_profs, axarr = plt.subplots(
+        nrows=1,
+        ncols=7,
+        figsize=(9, 2.5),
+        sharey="all",
+        constrained_layout=True,
+    )
 
-    # Potential temperature
+    # --- Potential temperature ---
     ref = _read_ref_csv(sps.ref_dir / "nn09_fig3.csv", sort="y")
-    ax = axarr[0, 0]
+    ax = axarr[0]
     for i, t in enumerate(t_short):
         ax.plot(*ref[t], color=f"C{i}", **ref_kw)
-        ax.plot(ds["th"].isel(time=i) - 273.15, ds["z"], color=f"C{i}", label=t, lw=1.5)
-    ax.set_xlabel("Pot. temp, C")
-    ax.set_ylabel("Height, m")
+        ax.plot(ds["th"].isel(time=i) - 273.15, ds["z"], color=f"C{i}", label=t)
+    ax.set_xlabel(f"{LABELS_PRETTY['th']}, {UNITS['thC']}")
+    ax.set_ylabel("z, m")
+    ax.set_ylim(0, 2000)
 
-    return fig
+    # --- Sensible heat flux ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig4.csv", sort="y")
+    ax = axarr[1]
+    for i in range(1, 5):
+        ax.plot(*ref[t_short[i]], color=f"C{i}", **ref_kw)
+        ax.plot(ds["w_th"].isel(time=i) * 100, ds["zh"], color=f"C{i}", label=t_short[i])
+    ax.axvline(0, color="k", ls="dotted", lw=0.75)
+    ax.set_xlabel(f"{LABELS_PRETTY['w_th']}, $10^{{-2}}$ {UNITS['w_th']}")
+
+    # --- Water vapor ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig8.csv", sort="y")
+    ax = axarr[2]
+    for i, t in enumerate(t_short):
+        ax.plot(*ref[t], color=f"C{i}", **ref_kw)
+        ax.plot(ds["qv"].isel(time=i) * 1000, ds["z"], color=f"C{i}", label=t)
+    ax.set_xlabel(f"{LABELS_PRETTY['qv']}, {UNITS['qv']}")
+
+    # --- Moisture flux ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig9.csv", sort="y")
+    ax = axarr[3]
+    for i in range(1, 5):
+        ax.plot(*ref[t_short[i]], color=f"C{i}", **ref_kw)
+        ax.plot(ds["w_qv"].isel(time=i) * 1e5, ds["zh"], color=f"C{i}", label=t_short[i])
+    ax.axvline(0, color="k", ls="dotted", lw=0.75)
+    ax.set_xlabel(f"{LABELS_PRETTY['w_qv']}, $10^{{-5}}$ {UNITS['w_qv']}")
+
+    # --- TKE ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig5.csv", sort="y")
+    ax = axarr[4]
+    for i in range(1, 5):
+        ax.plot(*ref[t_short[i]], color=f"C{i}", **ref_kw)
+        ax.plot(ds["qke"].isel(time=i) / 2, ds["z"], color=f"C{i}", label=t_short[i])
+    ax.set_xlabel(f"{LABELS_PRETTY['tke']}, {UNITS['qke']}")
+
+    # --- TKE budget at 14:00 ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig6.csv", sort="y")
+    ax = axarr[5]
+    ax.plot(*ref["S"], color="C0", **ref_kw)
+    ax.plot(*ref["B"], color="C1", **ref_kw)
+    ax.plot(*ref["T+P"], color="C2", **ref_kw)
+    ax.plot(*ref["D"], color="C3", **ref_kw)
+    ax.plot(ds_tke_budget["tke_P_S"].values, ds["z"], color="C0", label="Shear")
+    ax.plot(ds_tke_budget["tke_P_B"].values, ds["z"], color="C1", label="Buoyancy")
+    ax.plot(ds_tke_budget["div_w_tke"].values, ds["z"].values, color="C2", label="Transport")
+    ax.plot(-ds_tke_budget["tke_eps"].values, ds["z"], color="C3", label="Dissipation")
+    ax.set_xlim(-1, 1)
+    ax.set_xlabel(r"Normalized TKE budget, -")
+    ax.legend(fontsize=6, loc="upper left", ncols=2)
+
+    # --- Length scale ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig7.csv", sort="y")
+    ax = axarr[6]
+    for i in range(1, 5):
+        ax.plot(*ref[t_short[i]], color=f"C{i}", **ref_kw)
+        ax.plot(ds["L"].isel(time=i), ds["zh"], color=f"C{i}", label=t_short[i])
+    ax.set_xlabel(f"{LABELS_PRETTY['L']}, m")
+
+    # Figure-level legend: time colors + NN09 reference marker
+    proxy_ref = mlines.Line2D([], [], color="k", lw=0.75, ls="--", alpha=0.8, label="NN09 (ref)")
+    handles = [mlines.Line2D([], [], color=f"C{i}", label=t) for i, t in enumerate(t_short)]
+    handles.append(proxy_ref)
+    fig_profs.legend(handles=handles, loc="outside lower center", ncol=len(handles), fontsize=7)
+
+    # --- Mixed layer parameters scatter (Table 1) ---
+    fig_ml_params, axarr = plt.subplots(nrows=1, ncols=3, figsize=(4.5, 1.5), constrained_layout=True)
+
+    def _annotate_scatter(ax: plt.Axes, label: str) -> None:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        vmin, vmax = min(xmin, ymin), max(xmax, ymax)
+        ax.plot([vmin, vmax], [vmin, vmax], "k--", lw=0.75)
+        ax.set_xlabel(f"Ref {label}")
+        ax.set_ylabel(f"jax-scm {label}")
+
+    df = pd.read_csv(sps.ref_dir / "nn09_tab1.csv")
+    c = np.linspace(0, 1, len(df))
+
+    axarr[0].scatter(df["neg_R"], -ds_pp["R"][1:], c=c, s=10)
+    _annotate_scatter(axarr[0], "-R")
+
+    axarr[1].scatter(df["zi"], ds_pp["zi"][1:], c=c, s=10)
+    _annotate_scatter(axarr[1], "zi, m")
+
+    axarr[2].scatter(df["w_st"], ds_pp["w_st"][1:], c=c, s=10)
+    _annotate_scatter(axarr[2], r"$w_*$, m/s")
+
+    return fig_profs, fig_ml_params
 
 
 if __name__ == "__main__":
@@ -353,5 +449,6 @@ if __name__ == "__main__":
     # fig_a94 = plot_a94_res(sps_a94)
     # fig_a94.savefig(FIG_ROOT / "res_A94.pdf")
 
-    fig_wg33 = plot_wg33_res(sps_wg33)
-    fig_wg33.savefig(FIG_ROOT / "res_WG33.pdf")
+    (fig_wg33_prof, fig_wg33_ml_params) = plot_wg33_res(sps_wg33)
+    fig_wg33_prof.savefig(FIG_ROOT / "res_WG33.pdf")
+    fig_wg33_ml_params.savefig(FIG_ROOT / "res_WG33_ML.pdf")

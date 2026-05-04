@@ -75,7 +75,7 @@ def make_report(ds: xr.Dataset, fname: str):
         fig, ax = plt.subplots(figsize=(3, 5))
         for i in range(1, 5):
             ax.plot(*ref[t_short[i]], color=f"C{i}", **ref_kw)
-            ax.plot(ds["w_thv"].isel(time=i) * 100, ds["zh"], color=f"C{i}", label=t_short[i], lw=1.5)
+            ax.plot(ds["w_th"].isel(time=i) * 100, ds["zh"], color=f"C{i}", label=t_short[i], lw=1.5)
         ax.set_xlabel("Sensible heat flux, 1e-2 K m / s")
         ax.set_ylabel("Height, m")
         _add_ref_legend(ax)
