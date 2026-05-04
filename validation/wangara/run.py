@@ -8,7 +8,7 @@ import pandas as pd
 import xarray as xr
 
 from scm import consts
-from scm.config import load_namelist, Namelist
+from scm.config import Namelist, load_namelist
 from scm.examples.wangara import get_wangara_day33, postproc_wangara
 from scm.io.local import out_to_ds
 from scm.mynn.model import init_model

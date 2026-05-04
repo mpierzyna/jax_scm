@@ -4,6 +4,7 @@ import dataclasses
 
 import jax
 from jax import numpy as jnp
+
 from scm.metadata import meta_field
 
 

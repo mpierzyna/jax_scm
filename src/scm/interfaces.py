@@ -15,9 +15,9 @@ import jax.tree_util
 import pandas as pd
 
 from scm.grid import StaggeredGrid
-from scm.mo import MOResult, MOSettings
 from scm.metadata import meta_field
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN, GradVarsMYNN
+from scm.mo import MOResult, MOSettings
+from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN
 
 ParamsT = TypeVar("ParamsT")
 

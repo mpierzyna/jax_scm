@@ -2,8 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from scm.mo import init_mo_sfc, BusingerDyerSimFuncs, MOResult, MOSettings
-
+from scm.mo import BusingerDyerSimFuncs, MOResult, MOSettings, init_mo_sfc
 
 # jax.config.update("jax_disable_jit", True)
 # jax.config.update("jax_enable_x64", True)

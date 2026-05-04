@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import datetime
 import pathlib
-from typing import List, Dict
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -15,7 +15,7 @@ try:
 except ImportError:
     _PLOTLY_AVAILABLE = False
 
-from .base import fig_to_png_base64, fig_to_svg_base64, env
+from .base import env, fig_to_png_base64, fig_to_svg_base64
 
 # Load templates
 tmpl_base = env.get_template("_base.html")

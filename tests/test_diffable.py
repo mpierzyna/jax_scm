@@ -3,13 +3,13 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 import pytest
+from shared import FIXTURE_ROOT
 
 from scm import mo
 from scm.grid import StaggeredGrid
 from scm.mynn import closure
-from scm.mynn.interfaces import ProgVarsMYNN, GradVarsMYNN
 from scm.mynn.closure import MYNNParams
-from shared import FIXTURE_ROOT
+from scm.mynn.interfaces import GradVarsMYNN, ProgVarsMYNN
 
 
 @pytest.fixture
@@ -184,8 +184,8 @@ def test_mynn_mo_res_diffable(mynn_state):
 
 def test_e2e_diffable():
     """Test end-to-end differentiability of a short simulation"""
-    from scm.examples.gabls1 import get_gabls1
     from scm.config import load_namelist
+    from scm.examples.gabls1 import get_gabls1
     from scm.mynn.model import init_model
     from scm.time_stepping import simulate
 

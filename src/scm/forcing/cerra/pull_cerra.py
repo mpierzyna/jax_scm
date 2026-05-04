@@ -96,7 +96,7 @@ def setup(
         n_transfers=n_transfers,
     )
     (out_dir / "pull_cerra.sh").write_text(rclone_sh)
-    logger.info(f"-> pull_cerra.sh rendered.")
+    logger.info("-> pull_cerra.sh rendered.")
 
     # Create include file for rclone pull
     df_full = load_cerra_filelist(remote_flist_path)

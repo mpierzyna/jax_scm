@@ -5,9 +5,9 @@ from jax import numpy as jnp
 
 from scm import consts
 from scm.config import Namelist
-from scm.interfaces import Simulation, ModelFn, Output
+from scm.interfaces import ModelFn, Output, Simulation
 from scm.mynn.closure import MYNNParams
-from scm.time_stepping.explicit import get_euler_step_fn, get_ab2_step_fn
+from scm.time_stepping.explicit import get_ab2_step_fn, get_euler_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
 from scm.time_stepping.utils import IterationTimer, StepCarry
 

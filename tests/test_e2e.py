@@ -4,6 +4,7 @@ import jax
 import numpy as np
 import pytest
 import xarray as xr
+from shared import FIXTURE_ROOT
 
 from scm.config import load_namelist
 from scm.examples.andren1994.andren1994 import get_andren1994
@@ -13,7 +14,6 @@ from scm.interfaces import Simulation
 from scm.io.local import out_to_ds
 from scm.mynn.model import init_model
 from scm.time_stepping import simulate
-from shared import FIXTURE_ROOT
 
 
 class CaseSpec(NamedTuple):

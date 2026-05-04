@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import xarray as xr
 
-from scm.config import Namelist, AdaptiveTimestepConfig
+from scm.config import AdaptiveTimestepConfig, Namelist
 from scm.examples.gabls1 import get_gabls1
 from scm.interfaces import Output
 from scm.io.local import out_to_ds

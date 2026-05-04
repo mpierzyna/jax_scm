@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import pathlib
-
-import jax
-import xarray as xr
 from typing import Tuple
 
+import jax
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray as xr
 from PIL import Image
 
-from scm.config import load_namelist, Namelist
+from scm.config import Namelist, load_namelist
 from scm.examples.gabls1 import get_gabls1
 from scm.io.local import out_to_ds
 from scm.mynn.model import init_model

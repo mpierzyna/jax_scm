@@ -5,7 +5,7 @@ from typing import Callable
 import jax
 
 from scm.interfaces import ModelFn
-from scm.time_stepping.utils import clip_state, StepCarry
+from scm.time_stepping.utils import StepCarry, clip_state
 
 
 def get_euler_step_fn(model: ModelFn) -> Callable:

@@ -1,4 +1,4 @@
-from scm.config import load_namelist, Namelist
+from scm.config import Namelist, load_namelist
 
 
 def test_load_from_file(tmp_path):

@@ -50,7 +50,7 @@ the two most recent time levels before being passed to the CN solve.
 
 from __future__ import annotations
 
-from typing import Tuple, Callable
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -60,7 +60,7 @@ from scm import consts
 from scm.grid import StaggeredGrid
 from scm.interfaces import ModelFn
 from scm.mynn.interfaces import ProgVarsMYNN
-from scm.time_stepping.utils import clip_state, StepCarry
+from scm.time_stepping.utils import StepCarry, clip_state
 
 
 def get_cn_sparse_lin_system(

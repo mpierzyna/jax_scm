@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar, Literal, Callable
+from typing import Callable, Literal, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -60,7 +60,6 @@ def uv_geo_from_z(
         Dataset containing geostrophic wind components 'ug' and 'vg' in m/s.
     """
     # Constants
-    Omega = 7.2921e-5  # Earth's angular velocity (rad/s)
     R = 6371e3  # Earth's mean radius (m)
 
     # Convert lat/lon to radians

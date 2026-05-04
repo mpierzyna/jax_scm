@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Literal, Type
+from typing import Literal
 
 TLevelLiteral = Literal["full", "half", "surface", "2m", "10m"]
 

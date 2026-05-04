@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from scm.config import load_namelist, Namelist
+from scm.config import Namelist, load_namelist
 from scm.examples.andren1994 import get_andren1994, postproc_andren1994
 from scm.io.local import out_to_ds
 from scm.mynn.model import init_model
@@ -96,10 +96,6 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.set_ylim(0, 3)
         ax.legend()
         r.add_mpl_fig(fig, caption="Fig 3b: C_v deviation from steady state (y-momentum)")
-
-        # Time-averaged statistics over last 3/f (Andren 1994)
-        ds_sub = ds.sel(time=slice(7.0, None)).mean("time")
-        u_st = float(ds_sub["mo_u_st"])
 
         # Fig 4a: Surface layer phi_m gradient function
         data = read_ref_csv("ref/a94_fig4a.csv", sort="y")

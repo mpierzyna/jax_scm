@@ -1,8 +1,8 @@
+.PHONY: tests coverage badges format lint
 
 SRC_FILES  := $(shell find src/scm -name '*.py')
 TEST_FILES := $(shell find tests -name '*.py')
 
-.PHONY: tests coverage badges
 
 tests coverage: docs/coverage.xml
 
@@ -18,3 +18,10 @@ docs/test-badge.svg: docs/junit.xml
 	uv run genbadge tests -i $< -o $@
 
 badges: docs/coverage-badge.svg docs/test-badge.svg
+
+format:
+	uv run ruff check --select I --fix # sort imports
+	uv run ruff format # format code
+
+lint:
+	uv run ruff check --watch

@@ -1,4 +1,3 @@
-import pytest
 from scm.config import Namelist, TimeIntMethod
 from scm.examples import get_gabls1
 from scm.io.local import out_to_ds

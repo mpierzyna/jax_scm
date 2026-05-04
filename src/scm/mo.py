@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import logging
-from typing import Callable, Tuple, Literal, Protocol, Self
+from typing import Callable, Literal, Protocol, Self, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -11,11 +11,10 @@ import jax.numpy as jnp
 from scm import consts
 from scm import convert as conv
 from scm.config import yaml
+from scm.metadata import meta_field
 
 logger = logging.getLogger("scm.mo")
 SimFuncType = Callable[[jnp.ndarray], jnp.ndarray]
-
-from scm.metadata import meta_field
 
 
 @dataclasses.dataclass(kw_only=True)

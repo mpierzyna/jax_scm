@@ -3,14 +3,13 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from scm import consts
-from scm import convert
+from scm import consts, convert
 from scm.config import load_namelist
 from scm.forcing.interp import get_ts_interp_fn
 from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, Forcing
+from scm.interfaces import Forcing, Simulation
 from scm.io.local import out_to_ds
-from scm.mo import MOSettings, BusingerDyerAltSimFuncs
+from scm.mo import BusingerDyerAltSimFuncs, MOSettings
 from scm.mynn.interfaces import ProgVarsMYNN
 from scm.mynn.model import init_model
 from scm.time_stepping.base import simulate

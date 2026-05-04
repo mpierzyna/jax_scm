@@ -63,7 +63,7 @@ class TsPlot:
         self.log_toggle = log_toggle
 
     def set_ds(self, dw: DatasetWrapper):
-        raise NotImplemented("Switching Dataset not implemented, yet.")
+        raise NotImplementedError("Switching Dataset not implemented, yet.")
 
     def get_layout(self):
         return bl.column(

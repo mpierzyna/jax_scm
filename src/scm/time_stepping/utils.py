@@ -8,7 +8,7 @@ from jax import numpy as jnp
 
 from scm import consts
 from scm.mo import MOResult
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN
 
 
 @jax.tree_util.register_dataclass

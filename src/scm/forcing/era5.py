@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 import pathlib
-from typing import Literal, Dict, Tuple
+from typing import Dict, Literal, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ from scipy.interpolate import CubicSpline
 from scm import consts, convert
 from scm.forcing.interp import get_ts_interp_fn, interp_dtindex
 from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, Forcing
+from scm.interfaces import Forcing, Simulation
 from scm.io import era5
 from scm.io.cache import XRCache
 from scm.mo import MOSettings
@@ -390,7 +390,6 @@ def get_era5_sim(
 
 
 if __name__ == "__main__":
-
     # jax.config.update("jax_disable_jit", True)
 
     sim = get_era5_sim(

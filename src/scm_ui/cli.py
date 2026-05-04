@@ -1,7 +1,8 @@
 import click
 import xarray as xr
-from scm_ui.result_viewer import ResultViewer
 from bokeh.server.server import Server
+
+from scm_ui.result_viewer import ResultViewer
 
 
 def start_server(app_fn):

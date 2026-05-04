@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jax_scm"
-author = { name="Maximilian Pierzyna", email="mail@maximilian-pierzyna.de" }
-version = "0.1.0"
+author = { name = "Maximilian Pierzyna", email = "mail@maximilian-pierzyna.de" }
+version = "1.0.0-rc1"
 description = "An atmospheric single column model with numerical and machine learning components written in jax."
 readme = "README.md"
 license = "GPL-3.0-only"
@@ -47,29 +47,27 @@ dev = [
     "pip>=25.3",
     "pytest-cov>=7.1.0",
     "genbadge[coverage]>=1.1.3",
+    "ruff>=0.15.12",
 ]
 
 [tool.uv.sources]
-ls2d = { git = "https://github.com/maxiimilian/LS2D", rev = "fb66e73"}
+ls2d = { git = "https://github.com/maxiimilian/LS2D", rev = "fb66e73" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scm", "src/scm_ui"]
 
-[tool.black]
+[tool.ruff]
 line-length = 120  # align with pycharm
-# 'extend-exclude' excludes files or directories in addition to the defaults
-extend-exclude = '''
-# A regex preceded with ^/ will apply only to files and directories
-# in the root of the project.
-(
-  # Don't format submodules
-  ^/submodules
-  # This will match "research_tools" in any directory
-  | research_tools/
-)
-'''
+
+[tool.ruff.lint]
+extend-ignore = [
+    "E731", # Allow lambda assignments for simple forcing
+    "E741", # Allow ambiguous variable names
+
+]
 
 [tool.coverage.report]
 omit = [
-    "validation/*",  # Mostly plotting. Should not contribute to coverage.
+    "validation/*", # Mostly plotting. Should not contribute to coverage.
+    "src/scm/reporter", # not part of numerical code
 ]

@@ -11,7 +11,7 @@ from scm.grad import d_dz
 from scm.grid import StaggeredGrid
 from scm.interfaces import ClosureFn
 from scm.mo import MOResult
-from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN, GradVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN
 
 
 @jax.tree_util.register_dataclass

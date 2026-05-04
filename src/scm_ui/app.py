@@ -1,8 +1,8 @@
 import bokeh.layouts as bl
 import bokeh.models as bm
 import bokeh.plotting as bp
-
 from ic_bc_edit import MYNNEditor
+
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation
 from scm.io.local import out_to_ds
@@ -56,7 +56,7 @@ class App:
             pbar=False,
         )
         ds = out_to_ds(state_hist, diag_hist, mo_hist, time=t / 60 / 60, grid=sim.grid)
-        ds.to_netcdf(f"out_ui.nc")
+        ds.to_netcdf("out_ui.nc")
 
     def get_layout(self):
         return self.tabs

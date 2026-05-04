@@ -9,7 +9,6 @@ clipping of the argument sets gradients to zero.
 import jax
 import jax.numpy as jnp
 
-
 GRAD_MIN, GRAD_MAX = -1e6, 1e6
 
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Callable, Tuple
+import dataclasses
 import pathlib
+from typing import Callable, Tuple
 
 import jax
-import dataclasses
 import jax.numpy as jnp
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
@@ -12,12 +12,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import xarray as xr
-from flax.training.common_utils import shard_prng_key
 
-from scm import consts
-from scm.examples import get_andren1994, get_wangara_day33, get_gabls1
-from scm.examples.wangara import postproc_wangara
+from scm.examples import get_andren1994, get_gabls1, get_wangara_day33
 from scm.examples.andren1994 import postproc_andren1994
+from scm.examples.wangara import postproc_wangara
 from scm.interfaces import Simulation
 
 sns.set_palette("colorblind")
@@ -115,14 +113,14 @@ sims = [
     SimPlotSpec(
         sim=sim_gab1,
         short_name="GAB1",
-        time_formatter=lambda t: f"{t/3600:.0f}",
+        time_formatter=lambda t: f"{t / 3600:.0f}",
         time_label="Time, h",
         time_n_ticks=10,
     ),
     SimPlotSpec(
         sim=sim_wg33,
         short_name="WG33",
-        time_formatter=lambda t: f"{t/3600:02.0f}",
+        time_formatter=lambda t: f"{t / 3600:02.0f}",
         time_label="Time, LST",
         time_n_ticks=8,
         ref_dir=VAL_ROOT / "wangara" / "ref",

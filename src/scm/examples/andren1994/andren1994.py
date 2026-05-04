@@ -1,12 +1,13 @@
+import pathlib
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 from jax import numpy as jnp
-import pathlib
 
-from scm import convert, consts
+from scm import consts
 from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, Forcing
+from scm.interfaces import Forcing, Simulation
 from scm.mo import MOSettings
 from scm.mynn.interfaces import ProgVarsMYNN
 

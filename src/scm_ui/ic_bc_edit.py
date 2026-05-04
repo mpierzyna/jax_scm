@@ -6,7 +6,7 @@ import bokeh.plotting as bp
 import jax.numpy as jnp
 import numpy as np
 from bokeh.layouts import column, row
-from bokeh.models import Button, ColumnDataSource, PointDrawTool, RadioButtonGroup, DataTable, TableColumn
+from bokeh.models import Button, ColumnDataSource, DataTable, PointDrawTool, RadioButtonGroup, TableColumn
 from scipy.interpolate import CubicSpline
 
 from scm.forcing.interp import get_ts_interp_fn

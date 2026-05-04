@@ -2,8 +2,8 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, Forcing
-from scm.mo import MOSettings, BusingerDyerAltSimFuncs
+from scm.interfaces import Forcing, Simulation
+from scm.mo import BusingerDyerAltSimFuncs, MOSettings
 from scm.mynn.interfaces import ProgVarsMYNN
 
 

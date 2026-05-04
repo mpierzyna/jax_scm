@@ -1,4 +1,5 @@
 import pytest
+
 from scm.io.cache import XRCache
 
 
@@ -15,8 +16,8 @@ def test_argument_caching(xr_cache):
     def dummy_function(x, y=1):
         nonlocal call_count
         call_count += 1
-        import xarray as xr
         import numpy as np
+        import xarray as xr
 
         data = np.array([[x + y]])
         return xr.Dataset({"data": (("dim1", "dim2"), data)})
@@ -50,8 +51,8 @@ def test_fn_code_caching(xr_cache):
     def dummy_function(x):
         nonlocal call_count
         call_count += 1
-        import xarray as xr
         import numpy as np
+        import xarray as xr
 
         data = np.array([[x * 2]])
         return xr.Dataset({"data": (("dim1", "dim2"), data)})
@@ -71,8 +72,8 @@ def test_fn_code_caching(xr_cache):
     def dummy_function(x):
         nonlocal call_count
         call_count += 1
-        import xarray as xr
         import numpy as np
+        import xarray as xr
 
         data = np.array([[x * 3]])  # Changed multiplier from 2 to 3
         return xr.Dataset({"data": (("dim1", "dim2"), data)})

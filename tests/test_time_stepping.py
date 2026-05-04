@@ -1,8 +1,9 @@
-import pytest
 import jax.numpy as jnp
+import pytest
+
+from scm.config import AdaptiveTimestepConfig, Namelist, TimeIntMethod
 from scm.examples.gabls1 import get_gabls1
 from scm.mynn.model import init_model
-from scm.config import Namelist, TimeIntMethod, AdaptiveTimestepConfig
 from scm.time_stepping import simulate
 
 # Define the three test configurations

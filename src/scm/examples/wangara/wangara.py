@@ -7,12 +7,12 @@ import pandas as pd
 import xarray as xr
 from jax import numpy as jnp
 
-from scm import convert, consts
+from scm import consts, convert
 from scm.grid import StaggeredGrid
-from scm.interfaces import Simulation, Forcing
+from scm.interfaces import Forcing, Simulation
 from scm.mo import MOSettings
-from scm.mynn.interfaces import ProgVarsMYNN
 from scm.mynn.closure import MYNNParams
+from scm.mynn.interfaces import ProgVarsMYNN
 
 TIMES = ["09:00", "10:00", "12:00", "14:00", "16:00"]
 _T_LONG = [f"1967-08-16T{t}" for t in TIMES]
