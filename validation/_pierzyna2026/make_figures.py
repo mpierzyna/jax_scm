@@ -12,10 +12,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import xarray as xr
+from flax.training.common_utils import shard_prng_key
 
 from scm import consts
 from scm.examples import get_andren1994, get_wangara_day33, get_gabls1
 from scm.examples.wangara import postproc_wangara
+from scm.examples.andren1994 import postproc_andren1994
 from scm.interfaces import Simulation
 
 sns.set_palette("colorblind")
@@ -254,67 +256,74 @@ def plot_ic_bc(sps: SimPlotSpec) -> plt.Figure:
 
 
 def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
-    """Plot Andren 1994 results (Figs 2, 3a/b, 4a, 6a/b) against digitized reference data."""
+    """Plot Andren 1994 results against digitized reference data."""
 
     def _plot_ref(ax: plt.Axes, path: pathlib.Path, sort: str = "x") -> None:
         """Overplot all digitized reference curves on ax (A94 multi-model style)."""
         for label, (x, y) in _read_ref_csv(path, sort=sort).items():
             ax.plot(x, y, label=label, color="k", lw=0.75)
 
-    vd = get_andren1994_val_data(xr.open_dataset(sps.out_file))
-    ref_dir = sps.ref_dir
+    ds = xr.open_dataset(sps.out_file)
+    ds_pp = postproc_andren1994(ds)
+    tf = ds["time"]  # time in dataframe is normalized with f, so tf = t * f
+
     jax_kw = dict(color="C1", lw=1, label="jax-scm")
 
-    fig, axes = plt.subplots(2, 3, figsize=(7, 5), constrained_layout=True)
+    fig = plt.figure(figsize=(7, 4), constrained_layout=True)
+    gs = fig.add_gridspec(nrows=2, ncols=3)
 
-    # --- Row 0: time series ---
-    _plot_ref(axes[0, 0], ref_dir / "a94_fig2.csv")
-    axes[0, 0].plot(vd["tf"], vd["tke_norm"], **jax_kw)
-    axes[0, 0].set_xlabel("$tf$")
-    axes[0, 0].set_xlim(0, 10)
-    axes[0, 0].set_ylim(0, 1.25)
-    axes[0, 0].set_yticks(np.arange(0, 1.6, 0.25))
-    axes[0, 0].set_ylabel(r"$f \int q^2/2 \, dz \; / \; u_*^3$")
+    # Time series plots in first row
+    ax = fig.add_subplot(gs[0, 0])
+    _plot_ref(ax, sps.ref_dir / "a94_fig2.csv")
+    ax.plot(tf, ds_pp["tke_int_norm"], **jax_kw)
+    ax.set_xlabel("$t f$, -")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 1.25)
+    ax.set_yticks(np.arange(0, 1.6, 0.25))
+    ax.set_ylabel(r"$f \int q^2/2 \, dz \; / \; u_*^3$")
 
-    _plot_ref(axes[0, 1], ref_dir / "a94_fig3a.csv")
-    axes[0, 1].plot(vd["tf"], vd["C_u"], **jax_kw)
-    axes[0, 1].set_xlabel("$tf$")
-    axes[0, 1].set_xlim(0, 10)
-    axes[0, 1].set_ylim(0, 1.75)
-    axes[0, 1].set_ylabel(r"$C_u$")
+    ax = fig.add_subplot(gs[0, 1])
+    _plot_ref(ax, sps.ref_dir / "a94_fig3a.csv")
+    ax.plot(tf, ds_pp["C_u"], **jax_kw)
+    ax.set_xlabel("$t f$, -")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 2)
+    ax.set_ylabel(r"$C_u$")
 
-    _plot_ref(axes[0, 2], ref_dir / "a94_fig3b.csv")
-    axes[0, 2].plot(vd["tf"], vd["C_v"], **jax_kw)
-    axes[0, 2].set_xlabel("$tf$")
-    axes[0, 2].set_xlim(0, 10)
-    axes[0, 2].set_ylim(0, 3)
-    axes[0, 2].set_ylabel(r"$C_v$")
+    ax = fig.add_subplot(gs[0, 2])
+    _plot_ref(ax, sps.ref_dir / "a94_fig3b.csv")
+    ax.plot(tf, ds_pp["C_v"], **jax_kw)
+    ax.set_xlabel("$t f$, -")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 3)
+    ax.set_ylabel(r"$C_v$")
 
-    # --- Row 1: vertical profiles (time-averaged over last 3/f) ---
-    _plot_ref(axes[1, 0], ref_dir / "a94_fig4a.csv", sort="y")
-    axes[1, 0].plot(vd["phi_m"], vd["zh_log_norm"], **jax_kw)
-    axes[1, 0].axvline(1, color="k", ls="--", lw=0.75)
-    axes[1, 0].set_xlabel(r"$\Phi_M$")
-    axes[1, 0].set_xlim(0, 2)
-    axes[1, 0].set_ylabel(r"$zf/u_*$")
-    axes[1, 0].set_ylim(0, 0.1)
+    # Normalied profiles in second row
+    ax = fig.add_subplot(gs[1, 0])
+    _plot_ref(ax, sps.ref_dir / "a94_fig4a.csv", sort="y")
+    ax.plot(ds_pp["phi_m"], ds_pp["zh_phi_"], **jax_kw)
+    ax.set_xlabel(r"$\Phi_m$")
+    ax.set_xlim(0, 2)
+    ax.set_ylabel(r"$z f/u_*$")
+    ax.set_ylim(0, 0.1)
 
-    _plot_ref(axes[1, 1], ref_dir / "a94_fig6a.csv", sort="y")
-    axes[1, 1].plot(vd["uw_norm"], vd["zh_norm"], **jax_kw)
-    axes[1, 1].axvline(0, color="k", ls="--", lw=0.75)
-    axes[1, 1].set_xlabel(r"$\overline{uw}/u_*^2$")
-    axes[1, 1].set_ylabel(r"$zf/u_*$")
-    axes[1, 1].set_ylim(0, 0.35)
+    ax_uw = fig.add_subplot(gs[1, 1])
+    _plot_ref(ax_uw, sps.ref_dir / "a94_fig6a.csv", sort="y")
+    ax_uw.plot(ds_pp["uw_norm"], ds_pp["zh_"], **jax_kw)
+    ax_uw.axvline(0, color="k", ls="--", lw=0.75)
+    ax_uw.set_xlabel(r"$\overline{uw}/u_*^2$")
+    ax_uw.set_ylabel(r"$zf/u_*$")
+    ax_uw.set_ylim(0, 0.35)
 
-    _plot_ref(axes[1, 2], ref_dir / "a94_fig6b.csv", sort="y")
-    axes[1, 2].plot(vd["vw_norm"], vd["zh_norm"], **jax_kw)
-    axes[1, 2].axvline(0, color="k", ls="--", lw=0.75)
-    axes[1, 2].set_xlabel(r"$\overline{vw}/u_*^2$")
-    axes[1, 2].set_ylabel(r"$zf/u_*$")
-    axes[1, 2].set_ylim(0, 0.35)
+    ax_vw = fig.add_subplot(gs[1, 2], sharey=ax_uw)
+    _plot_ref(ax_vw, sps.ref_dir / "a94_fig6b.csv", sort="y")
+    ax_vw.plot(ds_pp["vw_norm"], ds_pp["zh_"], **jax_kw)
+    ax_vw.axvline(0, color="k", ls="--", lw=0.75)
+    ax_vw.set_xlabel(r"$\overline{vw}/u_*^2$")
+    ax_uw.set_ylabel(r"$zf/u_*$")
 
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=len(handles), fontsize=7)
+    # handles, labels = axes[0, 0].get_legend_handles_labels()
+    # fig.legend(handles, labels, loc="outside lower center", ncol=len(handles), fontsize=7)
 
     return fig
 
@@ -446,9 +455,9 @@ if __name__ == "__main__":
     #
     sps_a94, _, sps_wg33 = sims
     #
-    # fig_a94 = plot_a94_res(sps_a94)
-    # fig_a94.savefig(FIG_ROOT / "res_A94.pdf")
+    fig_a94 = plot_a94_res(sps_a94)
+    fig_a94.savefig(FIG_ROOT / "res_A94.pdf")
 
-    (fig_wg33_prof, fig_wg33_ml_params) = plot_wg33_res(sps_wg33)
-    fig_wg33_prof.savefig(FIG_ROOT / "res_WG33.pdf")
-    fig_wg33_ml_params.savefig(FIG_ROOT / "res_WG33_ML.pdf")
+    # (fig_wg33_prof, fig_wg33_ml_params) = plot_wg33_res(sps_wg33)
+    # fig_wg33_prof.savefig(FIG_ROOT / "res_WG33.pdf")
+    # fig_wg33_ml_params.savefig(FIG_ROOT / "res_WG33_ML.pdf")
