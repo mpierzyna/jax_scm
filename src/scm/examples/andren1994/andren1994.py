@@ -1,8 +1,10 @@
+import numpy as np
 import pandas as pd
+import xarray as xr
 from jax import numpy as jnp
 import pathlib
 
-from scm import convert
+from scm import convert, consts
 from scm.grid import StaggeredGrid
 from scm.interfaces import Simulation, Forcing
 from scm.mo import MOSettings
@@ -49,4 +51,61 @@ def get_andren1994(Nz: int = 40) -> Simulation:
         t_start_s=0,
         t_end_s=int(10 / f_c),
         t_index_fn=lambda t_s: t_s * f_c,  # inertial periods
+    )
+
+
+def postproc_andren1994(ds: xr.Dataset) -> xr.Dataset:
+    """Diagnosed values for Andren 1994 validation"""
+    # Normalized vertically integrated TKE
+    f = ds["frc_f_c"].item()
+    tke_int = np.trapezoid(y=ds["qke"] / 2, x=ds["z"])
+    tke_int_norm = f / ds["mo_u_st"] ** 3 * tke_int
+
+    # C_u and C_v deviation from steady state
+    uw0 = ds["mo_u_w"]
+    C_u = -f / uw0 * np.trapezoid(y=ds["v"] - ds["frc_v_geo"], x=ds["z"])
+
+    vw0 = ds["mo_v_w"]
+    C_v = f / vw0 * np.trapezoid(y=ds["u"] - ds["frc_u_geo"], x=ds["z"])
+
+    # Time-averaged statistics over last 3/f (Andren 1994)
+    ds_sub = ds.sel(time=slice(7.0, None)).mean("time")  # time is in normalized units, so just avg 7 to 10
+    u_st = float(ds_sub["mo_u_st"])
+
+    # Surface layer phi_m gradient function
+    mo_settings = MOSettings.deserialize(ds.attrs["mo_settings"])  # deserialize for z0m
+
+    # Add u=v=0 at roughness height for better gradient calculation near the surface
+    u = ds_sub["u"].values
+    u = np.insert(u, 0, 0)
+    v = ds_sub["v"].values
+    v = np.insert(v, 0, 0)
+    z = ds_sub["z"].values
+    z = np.insert(z, 0, mo_settings.z0h)
+    zh = np.diff(z) / np.log(z[1:] / z[:-1])  # log-mean height: correct for log-law profiles near surface
+
+    dz = np.diff(z)
+    du_dz = (u[1:] - u[:-1]) / dz
+    dv_dz = (v[1:] - v[:-1]) / dz
+    phi_m = consts.kappa * zh / u_st * np.sqrt(du_dz**2 + dv_dz**2)
+
+    # assign normalized height, different than momentum fluxes below because of log-mean height calculation
+    phi_m = xr.DataArray(phi_m, coords={"zh_phi_": zh * f / u_st}, dims=["zh_phi_"])
+
+    # Normalized momentum flux profiles
+    zh_norm = (ds_sub["zh"] * f / u_st).values
+    uw_norm = ds_sub["u_w"] / u_st**2
+    uw_norm = xr.DataArray(uw_norm.values, coords={"zh_": zh_norm}, dims=["zh_"])
+    vw_norm = ds_sub["v_w"] / u_st**2
+    vw_norm = xr.DataArray(vw_norm.values, coords={"zh_": zh_norm}, dims=["zh_"])
+
+    return xr.Dataset(
+        {
+            "tke_int_norm": tke_int_norm,
+            "C_u": C_u,
+            "C_v": C_v,
+            "phi_m": phi_m,
+            "uw_norm": uw_norm,
+            "vw_norm": vw_norm,
+        }
     )
