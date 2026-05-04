@@ -15,13 +15,15 @@ from scm.config import yaml
 logger = logging.getLogger("scm.mo")
 SimFuncType = Callable[[jnp.ndarray], jnp.ndarray]
 
+from scm.metadata import meta_field
 
-@dataclasses.dataclass
+
+@dataclasses.dataclass(kw_only=True)
 class MOSettings:
     """Settings for MO atmosphere surface coupling."""
 
-    z0m: float  # Momentum roughness length, m
-    z0h: float  # Heat roughness length, m
+    z0m: float = meta_field("Momentum roughness length", units="m", level="surface")
+    z0h: float = meta_field("Heat roughness length", units="m", level="surface")
 
     # Businger-Dyer similarity functions by default
     sim_funcs: MOSimilarityFuncs = dataclasses.field(default_factory=lambda: BusingerDyerSimFuncs())
@@ -45,26 +47,29 @@ class MOSettings:
 
 
 @jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class MOResult:
     """Result of Monin-Obukhov similarity model evaluation."""
 
-    u_st: jnp.ndarray  # Friction velocity at the surface
-    w_th: jnp.ndarray  # Sensible heat flux at the surface
-    w_thv: jnp.ndarray  # Buoyancy flux at the surface
-    w_qv: jnp.ndarray  # Moisture flux at the surface
-    L: jnp.ndarray  # Obukhov length
-    zeta: jnp.ndarray  # Stability parameter (z/L)
-    zeta_err: jnp.ndarray  # Relative error in zeta convergence
-    m10: jnp.ndarray  # 10m wind speed following MOST
-    th2: jnp.ndarray  # 2m temperature following MOST
-    th_s: jnp.ndarray  # Surface temperature
-    u_w: jnp.ndarray  # Surface u-w stress
-    v_w: jnp.ndarray  # Surface v-w stress
-    dudz: jnp.ndarray  # dudz at z (=dz/2) following MOST
-    dvdz: jnp.ndarray  # dvdz at z (=dz/2) following MOST
-    dthdz: jnp.ndarray  # dth/dz at z (=dz/2) following MOST
-    dqvdz: jnp.ndarray  # dqv/dz at z (=dz/2) following MOST
+    u_st: jnp.ndarray = meta_field("Friction velocity", units="m/s", level="surface")
+    w_th: jnp.ndarray = meta_field("Sensible heat flux", units="K m/s", level="surface")
+    w_thv: jnp.ndarray = meta_field(
+        "Buoyancy flux (virtual potential temperature flux)", units="K m/s", level="surface"
+    )
+    w_qv: jnp.ndarray = meta_field("Moisture flux", units="(kg/kg) m/s", level="surface")
+    L: jnp.ndarray = meta_field("Obukhov length", units="m", level="surface")
+    zeta: jnp.ndarray = meta_field("Stability parameter (z/L)", units=None, level="surface")
+    zeta_err: jnp.ndarray = meta_field("Relative error in zeta convergence", units=None, level="surface")
+    m10: jnp.ndarray = meta_field("10m wind speed from MOST", units="m/s", level="10m")
+    th2: jnp.ndarray = meta_field("2m potential temperature from MOST", units="K", level="2m")
+    th_s: jnp.ndarray = meta_field("Surface temperature", units="K", level="surface")  # todo: potential?
+    u_w: jnp.ndarray = meta_field("Surface u-w stress", units="(m/s)^2", level="surface")
+    v_w: jnp.ndarray = meta_field("Surface v-w stress", units="(m/s)^2", level="surface")
+    # Gradients at first full level from MOST
+    dudz: jnp.ndarray = meta_field("du/dz at z (=dz/2) from MOST", units="s^-1", level="surface")
+    dvdz: jnp.ndarray = meta_field("dv/dz at z (=dz/2) from MOST", units="s^-1", level="surface")
+    dthdz: jnp.ndarray = meta_field("dth/dz at z (=dz/2) from MOST", units="K/m", level="surface")
+    dqvdz: jnp.ndarray = meta_field("dqv/dz at z (=dz/2) from MOST", units="(kg/kg)/m", level="surface")
 
 
 class MOFunc(Protocol):

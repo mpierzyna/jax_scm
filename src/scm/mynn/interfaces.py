@@ -4,50 +4,53 @@ import dataclasses
 
 import jax
 from jax import numpy as jnp
+from scm.metadata import meta_field
 
 
 @jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class ProgVarsMYNN:
     """Prognostic variables"""
 
-    u: jnp.ndarray
-    v: jnp.ndarray
-    th: jnp.ndarray  # potential temperature (no condensation, so th_l = th)
-    qv: jnp.ndarray  # specific humidity (vapor only, no condensation)
-    qke: jnp.ndarray  #  qke = q^2 = uu + vv + ww = 2*TKE
+    u: jnp.ndarray = meta_field(long_name="u velocity", units="m/s", level="full")
+    v: jnp.ndarray = meta_field(long_name="v velocity", units="m/s", level="full")
+    th: jnp.ndarray = meta_field(
+        long_name="potential temperature", units="K", level="full"
+    )  # no condensation, so th_l = th compared to NN09
+    qv: jnp.ndarray = meta_field(long_name="specific humidity", units="kg/kg", level="full")  # vapor only
+    qke: jnp.ndarray = meta_field(long_name="TWICE turbulent kinetic energy", units="m^2/s^2", level="full")
 
 
 @jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class DiagVarsMYNN:
     # Parameterized fluxes and variances
-    u_w: jnp.ndarray
-    v_w: jnp.ndarray
-    w_th: jnp.ndarray  # sensible heat flux
-    w_thv: jnp.ndarray  # buoyancy flux (virtual potential temperature flux)
-    w_qv: jnp.ndarray  # moisture flux
-    th_th: jnp.ndarray  # potential temperature variance
+    u_w: jnp.ndarray = meta_field(long_name="momentum flux (<uw>)", units="m^2/s^2", level="half")
+    v_w: jnp.ndarray = meta_field(long_name="momentum flux (<vw>)", units="m^2/s^2", level="half")
+    w_th: jnp.ndarray = meta_field(long_name="sensible heat flux", units="K m/s", level="half")
+    w_thv: jnp.ndarray = meta_field(long_name="buoyancy flux ", units="K m/s", level="half")
+    w_qv: jnp.ndarray = meta_field(long_name="moisture flux", units="kg/kg m/s", level="half")
+    th_th: jnp.ndarray = meta_field(long_name="potential temperature variance", units="K^2", level="full")
 
     # Length scales
-    L: jnp.ndarray  # turbulent length scale
-    L_S: jnp.ndarray  # surface length scale
-    L_T: jnp.ndarray  # turbulent length scale
-    L_B: jnp.ndarray  # buoyancy length scale
+    L: jnp.ndarray = meta_field(long_name="turbulent length scale", units="m", level="half")
+    L_S: jnp.ndarray = meta_field(long_name="surface length scale", units="m", level="half")
+    L_T: jnp.ndarray = meta_field(long_name="turbulent length scale", units="m", level="half")
+    L_B: jnp.ndarray = meta_field(long_name="buoyancy length scale", units="m", level="half")
 
     # Eddy diffusivities
-    Km: jnp.ndarray
-    Kh: jnp.ndarray
-    Kq: jnp.ndarray  # QKE turbulent transport diffusivity (= L * q * Sq)
+    Km: jnp.ndarray = meta_field(long_name="momentum diffusivity", units="m^2/s", level="half")
+    Kh: jnp.ndarray = meta_field(long_name="heat diffusivity", units="m^2/s", level="half")
+    Kq: jnp.ndarray = meta_field(long_name="QKE diffusivity", units="m^2/s", level="half")  # (= L * q * Sq)
 
     # TKE terms
-    w_qke: jnp.ndarray  # TKE flux (turbulent transport)
-    qke_P_S: jnp.ndarray  # TKE production by shear
-    qke_P_B: jnp.ndarray  # TKE production by buoyancy
-    qke_eps: jnp.ndarray  # TKE dissipation
+    w_qke: jnp.ndarray = meta_field(long_name="QKE flux", units="m^3/s^3", level="half")
+    qke_P_S: jnp.ndarray = meta_field(long_name="QKE shear production rate", units="m^2/s^3", level="half")
+    qke_P_B: jnp.ndarray = meta_field(long_name="QKE buoyancy production rate", units="m^2/s^3", level="half")
+    qke_eps: jnp.ndarray = meta_field(long_name="QKE dissipation rate", units="m^2/s^3", level="half")
 
     # Auxiliary parameters
-    ct2: jnp.ndarray  # temperature structure function coefficient
+    ct2: jnp.ndarray = meta_field(long_name="CT2", units="K/m^(2/3)", level="half")
 
 
 # Gradients of prognostic variables share the same field structure as ProgVarsMYNN but live

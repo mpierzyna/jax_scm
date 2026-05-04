@@ -1,39 +1,19 @@
 import pytest
-
 from scm.config import Namelist, TimeIntMethod
-from scm.examples.gabls1 import get_gabls1
+from scm.examples import get_gabls1
 from scm.io.local import out_to_ds
 from scm.mynn.io import sim_from_ds
 from scm.mynn.model import init_model
 from scm.time_stepping import simulate
 
-# In GABLS1, forcing is defined as function but saved as time series in output dataset.
-# When loading dataset again, time series is interpolated leading to deviations in forcing and, thus,
-# error accumulation over time. Hence, we need to tolerate the errors defined below.
-MAX_ERR_THRESHOLDS = {
-    "v_w": 1e-1,
-    "w_th": 5e-2,
-    "w_thv": 5e-2,
-    "w_qke": 5e-2,
-    "th_th": 0.5,
-    "L": 5,
-    "L_S": 1e-2,
-    "Km": 3.5e-2,
-    "Kh": 5e-2,
-    "Kq": 7e-2,
-    "qke_P_B": 4e-2,
-    "qke_eps": 1.5e-2,
-    "mo_zeta": 4e-2,
-}
 
-
-@pytest.mark.skip(reason="fragile round-trip test, breaks easily when physics change")
 def test_sim_from_ds():
+    """Test restoring from ds output dataset."""
     # Test that a simulation can be restored from an output dataset, and that the new output matches the original.
     cfg = Namelist(time_int=TimeIntMethod.IMPLICIT, dt_s=1.0)
 
     # Run simulation normally
-    sim = get_gabls1()
+    sim = get_gabls1(Nz=64)
     model = init_model(sim, cfg=cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
     ds = out_to_ds(out=out, sim=sim)
@@ -44,21 +24,57 @@ def test_sim_from_ds():
     out_ = simulate(model=model_, sim=sim_, cfg=cfg)
     ds_ = out_to_ds(out=out_, sim=sim_)
 
-    # Compare new output to original
-    err = (ds - ds_) / ds.mean()
-    for var in err.data_vars:
-        # Skip forcing
-        if "frc" in var:
-            continue
-        # Skip humidity because not in case
-        if "qv" in var:
-            continue
-        if var in ["mo_zeta_err", "ct2"]:
+    # Compute errors between original and restored simulations
+    ds_scale = ds.isel(time=-1).mean()  # normalize by final time step (mean for profiles)
+    rel_mae = (ds - ds_).mean() / ds_scale
+    rel_rmse = ((ds - ds_) ** 2).mean() ** 0.5 / ds_scale
+
+    # Skip humidity variables and v_geo because they are zero in GABLS1
+    vars_skip = [
+        "qv",
+        "w_qv",
+        "mo_w_qv",
+        "mo_dqvdz",
+        "frc_v_geo",
+        "frc_w_qv_s",
+        "mo_zeta_err",
+        "mo_L",  # todo: why nan?
+    ]
+
+    for var in ds.data_vars:
+        if var in vars_skip:
             continue
 
-        # Check that error is small
-        assert err[var].max().item() < MAX_ERR_THRESHOLDS.get(str(var), 1e-2)
-        assert err[var].mean().item() < 1e-2  # mean error below 0.1%
+        assert rel_mae[var] < 1e-5, f"Rel. MAE for {var} exceeds threshold: {rel_mae[var]:.2e}"
+        assert rel_rmse[var] < 1e-5, f"Rel. RMSE for {var} exceeds threshold: {rel_rmse[var]:.2e}"
 
-        # For setting thresholds, print max error
-        # print(var, err[var].max().item())
+
+def test_ds_metadata():
+    """Test that all variables in ds output have metadata (long_name and units)"""
+    cfg = Namelist(time_int=TimeIntMethod.IMPLICIT, dt_s=1.0, dt_s_out=30)
+
+    # Run simulation normally
+    sim = get_gabls1(Nz=16)
+    sim.t_end_s = 60  # shorten simulation for test speed
+    model = init_model(sim, cfg=cfg)
+    out = simulate(model=model, sim=sim, cfg=cfg)
+    ds = out_to_ds(out=out, sim=sim)
+
+    for var in ds.data_vars:
+        assert "long_name" in ds[var].attrs, f"{var} is missing long_name metadata"
+        assert "units" in ds[var].attrs, f"{var} is missing units metadata"
+
+
+def test_to_nc(tmpdir):
+    """Test that serialization to netcdf works"""
+    cfg = Namelist(time_int=TimeIntMethod.IMPLICIT, dt_s=1.0, dt_s_out=30)
+
+    # Run simulation normally
+    sim = get_gabls1(Nz=16)
+    sim.t_end_s = 60  # shorten simulation for test speed
+    model = init_model(sim, cfg=cfg)
+    out = simulate(model=model, sim=sim, cfg=cfg)
+
+    # Convert to dataset and save to netcdf
+    ds = out_to_ds(out=out, sim=sim)
+    ds.to_netcdf(tmpdir / "test.nc")

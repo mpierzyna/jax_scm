@@ -69,3 +69,7 @@ extend-exclude = '''
 )
 '''
 
+[tool.coverage.report]
+omit = [
+    "validation/*",  # Mostly plotting. Should not contribute to coverage.
+]

@@ -16,6 +16,7 @@ import pandas as pd
 
 from scm.grid import StaggeredGrid
 from scm.mo import MOResult, MOSettings
+from scm.metadata import meta_field
 from scm.mynn.interfaces import ProgVarsMYNN, DiagVarsMYNN, GradVarsMYNN, MYNNParams  # noqa: F401
 
 ParamsT = TypeVar("ParamsT")
@@ -42,21 +43,41 @@ class Simulation:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Forcing:
     # Geostrophic wind components
-    u_geo: ForceSingleFn  # Unit: m/s; must return (Nz,)
-    v_geo: ForceSingleFn  # Unit: m/s; must return (Nz,)
+    u_geo: ForceSingleFn = meta_field("u geostrophic wind", "m/s", level="full")  # must return (Nz,)
+    v_geo: ForceSingleFn = meta_field("v geostrophic wind", "m/s", level="full")  # must return (Nz,)
 
     # Coriolis parameter
-    f_c: float  # Unit: (1/s); remains static
+    f_c: float = meta_field("Coriolis parameter", "1/s", level="full")  # static
 
     # Surface heat flux or temperature
-    w_th_s: ForceSingleFn | None = None  # Unit: (K m/s); must return scalar
-    th_s: ForceSingleFn | None = None  # Unit: K, must return scalar
+    w_th_s: ForceSingleFn | None = meta_field(
+        long_name="surface potential temperature flux (forcing)",
+        units="K m/s",
+        level="surface",
+        default=None,
+    )  # must return scalar
+
+    th_s: ForceSingleFn | None = meta_field(
+        long_name="surface potential temperature (forcing)",
+        units="K",
+        level="surface",
+        default=None,
+    )  # must return scalar
 
     # Surface Latent heat flux
-    w_qv_s: ForceSingleFn  # Unit: (kg/kg m/s); must return scalar
+    w_qv_s: ForceSingleFn = meta_field(
+        long_name="surface specific humidity flux (forcing)",
+        units="kg/kg m/s",
+        level="surface",
+    )  # must return scalar
 
     # Capping inversion at domain top
-    dth_dz_top: float = 0.01  # Unit: (K/m)
+    dth_dz_top: float = meta_field(
+        long_name="potential temperature gradient at domain top (forcing)",
+        units="K/m",
+        level="full",
+        default=0.01,
+    )
 
     # Large scale tendencies
     ls_tends: ForceTendsFn | None = None
