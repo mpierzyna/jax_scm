@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+from shutil import which
 from typing import Callable, Tuple
 
 import jax
@@ -15,16 +16,17 @@ import xarray as xr
 
 from scm.examples import get_andren1994, get_gabls1, get_wangara_day33
 from scm.examples.andren1994 import postproc_andren1994
+from scm.examples.gabls1 import postproc_gabls1
 from scm.examples.wangara import postproc_wangara
 from scm.interfaces import Simulation
 
 sns.set_palette("colorblind")
 plt.rcParams.update(
     {
-        # "font.family": "serif",
+        "font.family": "serif",
         "font.size": 8,
-        # "text.usetex": True,
-        # "text.latex.preamble": r"\usepackage{amsmath}",
+        "text.usetex": True,
+        "text.latex.preamble": r"\usepackage{amsmath}",
         "figure.dpi": 300,
         # "figure.labelsize": 8,
         "lines.linewidth": 1.0,
@@ -32,6 +34,8 @@ plt.rcParams.update(
     }
 )
 
+
+FIG_WIDTH = 7  # Full-page width for figure. Use as base.
 
 COLORS = {
     "u": "C0",
@@ -42,15 +46,22 @@ COLORS = {
 }
 
 LABELS_PRETTY = {
+    # Mean
     "u": "$U$",
     "v": "$V$",
+    "m": r"$M$",
     "th": r"$\Theta$",
+    "th_s": r"$\Theta_s$",
     "qv": r"$Q_v$",
+    # TKE/QKE
     "qke": r"$q^2$",
     "tke": r"$q^2/2$",
-    "th_s": r"$\theta_s$",
+    # Turb stats
     "w_th": r"$\langle w \theta \rangle$",
     "w_qv": r"$\langle w {q_v} \rangle$",
+    "u_w": r"$\langle u w \rangle$",
+    "v_w": r"$\langle v w \rangle$",
+    "u_st": r"$u_*$",
     "L": "$L_M$",
 }
 UNITS = {
@@ -63,6 +74,10 @@ UNITS = {
     "th_s": "K",
     "w_th": "K m s$^{-1}$",
     "w_qv": "g kg$^{-1}$ m s$^{-1}$",
+    "u_w": "m$^2$ s$^{-2}$",
+    "v_w": "m$^2$ s$^{-2}$",
+    "u_st": "m s$^{-1}$",
+    "K_m": "m$^2$ s$^{-1}$",
 }
 
 FIG_ROOT = pathlib.Path("figures")
@@ -116,6 +131,8 @@ sims = [
         time_formatter=lambda t: f"{t / 3600:.0f}",
         time_label="Time, h",
         time_n_ticks=10,
+        ref_dir=VAL_ROOT / "gabls1" / "ref_cuxart06",
+        out_file=VAL_ROOT / "gabls1" / "out_cn.nc",
     ),
     SimPlotSpec(
         sim=sim_wg33,
@@ -146,6 +163,11 @@ def _add_is_const(v: jnp.ndarray, ax: plt.Axes, x: float = 0.95, y: float = 0.95
         ha = "right"
 
     ax.text(x, y, label, transform=ax.transAxes, ha=ha, va="top", fontsize=6, color=color)
+
+
+def _yticks_only(ax: plt.Axes) -> None:
+    """Keep y ticks, but turn labels off"""
+    ax.tick_params(axis="y", which="both", left=True, labelleft=False)
 
 
 def plot_ic(sps: SimPlotSpec, fig: plt.Figure, gs: plt.SubplotSpec) -> None:
@@ -326,7 +348,7 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     return fig
 
 
-def plot_wg33_res(sps: SimPlotSpec) -> Tuple[plt.Figure, plt.Figure]:
+def plot_wg33_res(sps: SimPlotSpec) -> plt.Figure:
     """Plot Wangara Day 33 results against NN09 reference."""
     cmap = "viridis"
     t_short = ["09:00", "10:00", "12:00", "14:00", "16:00"]
@@ -341,7 +363,7 @@ def plot_wg33_res(sps: SimPlotSpec) -> Tuple[plt.Figure, plt.Figure]:
 
     ref_kw = dict(ls="--", lw=0.75, alpha=0.8)
 
-    fig = plt.figure(figsize=(9, 5), constrained_layout=True)
+    fig = plt.figure(figsize=(FIG_WIDTH, 5), constrained_layout=True)
     gs = fig.add_gridspec(nrows=2, ncols=6)
 
     # --- Potential temperature ---
@@ -449,7 +471,90 @@ def plot_wg33_res(sps: SimPlotSpec) -> Tuple[plt.Figure, plt.Figure]:
     ax.scatter(df["w_st"], ds_pp["w_st"][1:], c=c, s=10)
     _annotate_scatter(ax, r"$w_*$, m/s")
 
-    return fig, fig
+    return fig
+
+
+def plot_gabls1_res(sps: SimPlotSpec) -> plt.Figure:
+    """Plot GABLS1 results against Cuxart et al. (2006) multi-model reference."""
+
+    def _plot_ref(ax: plt.Axes, path: pathlib.Path, sort: str = "x") -> None:
+        ref_kw = dict(color="k", lw=0.75, alpha=0.6)
+        for x, y in _read_ref_csv(path, sort=sort).values():
+            ax.plot(x, y, **ref_kw)
+
+    ds = xr.open_dataset(sps.out_file)
+    ds_pp = postproc_gabls1(ds)
+    t_min = ds["time"] * 60  # h to min
+    jax_kw = dict(color="C1", lw=1, label="jax-scm")
+
+    fig = plt.figure(figsize=(FIG_WIDTH, FIG_WIDTH / 2), constrained_layout=True)
+    gs = fig.add_gridspec(nrows=2, ncols=6)
+
+    # --- Profiles at 9 h ---
+    ax_m = fig.add_subplot(gs[0, 0])
+    _plot_ref(ax_m, sps.ref_dir / "fig03_m.csv", sort="y")
+    ax_m.plot(ds_pp["m"].isel(time=-1), ds["z"], **jax_kw)
+    ax_m.set_xlim(0, 11)
+    ax_m.set_ylim(0, 400)
+    ax_m.set_xlabel(f"{LABELS_PRETTY['m']}, {UNITS['u']}")
+    ax_m.set_ylabel("z, m")
+
+    ax = fig.add_subplot(gs[0, 1], sharey=ax_m)
+    _plot_ref(ax, sps.ref_dir / "fig03_th.csv", sort="y")
+    ax.plot(ds["th"].isel(time=-1), ds["z"], **jax_kw)
+    ax.set_xlim(262.5, 268)
+    ax.set_xlabel(f"{LABELS_PRETTY['th']}, {UNITS['th']}")
+    _yticks_only(ax)
+
+    ax = fig.add_subplot(gs[0, 2], sharey=ax_m)
+    _plot_ref(ax, sps.ref_dir / "fig04_hfx.csv", sort="y")
+    ax.plot(ds["w_th"].isel(time=-1), ds["zh"], **jax_kw)
+    ax.set_xlim(-0.02, 0)
+    ax.set_xlabel(f"{LABELS_PRETTY['w_th']}, {UNITS['w_th']}")
+    _yticks_only(ax)
+
+    ax = fig.add_subplot(gs[0, 3], sharey=ax_m)
+    _plot_ref(ax, sps.ref_dir / "fig04_momentum.csv", sort="y")
+    ax.plot(ds_pp["tau"].isel(time=-1), ds["zh"], **jax_kw)
+    ax.set_xlim(0, 0.15)
+    ax.set_xlabel(rf"$\tau$, {UNITS['u_w']}")
+    _yticks_only(ax)
+
+    ax = fig.add_subplot(gs[0, 4], sharey=ax_m)
+    _plot_ref(ax, sps.ref_dir / "fig06_Km.csv", sort="y")
+    ax.plot(ds["Km"].isel(time=-1), ds["zh"], **jax_kw)
+    ax.set_xlim(0, 6)
+    ax.set_xlabel(rf"$K_m$, {UNITS['K_m']}")
+    _yticks_only(ax)
+
+    ax = fig.add_subplot(gs[0, 5], sharey=ax_m)
+    _plot_ref(ax, sps.ref_dir / "fig06_Kh.csv", sort="y")
+    ax.plot(ds["Kh"].isel(time=-1), ds["zh"], **jax_kw)
+    ax.set_xlim(0, 6)
+    ax.set_xlabel(rf"$K_h$, {UNITS['K_m']}")
+    _yticks_only(ax)
+
+    # --- Time series ---
+    gs_sub = gs[1, :].subgridspec(nrows=1, ncols=2, width_ratios=(1, 1))
+
+    ax = fig.add_subplot(gs_sub[0, 0])
+    _plot_ref(ax, sps.ref_dir / "fig02_blh.csv", sort="x")
+    ax.plot(t_min, ds_pp["blh"], **jax_kw)
+    ax.set_xlim(0, 540)
+    ax.set_ylim(0, 400)
+    ax.set_xlabel("$t$, h")
+    ax.set_ylabel("BLH, m")
+
+    ax = fig.add_subplot(gs_sub[0, 1])
+    _plot_ref(ax, sps.ref_dir / "fig02_ust.csv", sort="x")
+    ax.plot(t_min, ds["mo_u_st"], **jax_kw)
+    ax.set_xlim(0, 540)
+    ax.set_ylim(0.2, 0.5)
+    ax.set_xlabel("$t$, h")
+    ax.set_ylabel(f"{LABELS_PRETTY['u_st']}, {UNITS['u_st']}")
+    ax.legend(fontsize=6)
+
+    return fig
 
 
 if __name__ == "__main__":
@@ -457,11 +562,13 @@ if __name__ == "__main__":
     #     fig_ic_bc = plot_ic_bc(sim)
     #     fig_ic_bc.savefig(FIG_ROOT / f"ic_bc_{sim.short_name}.pdf")
     #
-    sps_a94, _, sps_wg33 = sims
+    sps_a94, sps_gab1, sps_wg33 = sims
     #
     # fig_a94 = plot_a94_res(sps_a94)
     # fig_a94.savefig(FIG_ROOT / "res_A94.pdf")
 
-    (fig_wg33_prof, fig_wg33_ml_params) = plot_wg33_res(sps_wg33)
-    fig_wg33_prof.savefig(FIG_ROOT / "res_WG33.pdf")
-    fig_wg33_ml_params.savefig(FIG_ROOT / "res_WG33_ML.pdf")
+    fig_gab1 = plot_gabls1_res(sps_gab1)
+    fig_gab1.savefig(FIG_ROOT / "res_GAB1.pdf")
+
+    # fig_wg33 = plot_wg33_res(sps_wg33)
+    # fig_wg33.savefig(FIG_ROOT / "res_WG33.pdf")
