@@ -1,3 +1,4 @@
+import xarray as xr
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
@@ -107,3 +108,12 @@ def get_gabls1(Nz: int = 64, plot: bool = False) -> Simulation:
         th_ref=263.5,  # midpoint of surface cooling range, following microhh GABLS1 case
         t_index_fn=lambda t_s: t_s / 3600,  # hours
     )
+
+
+def postproc_gabls1(ds: xr.Dataset) -> xr.Dataset:
+    """Postprocess GABLS1 output to compute additional diagnostics."""
+    m = (ds["u"] ** 2 + ds["v"] ** 2) ** 0.5  # wind magnitude
+    tau = (ds["u_w"] ** 2 + ds["v_w"] ** 2) ** 0.5  # total stress
+    blh = (tau / tau.isel(zh=0)).where(lambda x: x < 0.05).idxmax("zh")  # blh where stress < 5% of surface stress
+
+    return xr.Dataset({"m": m, "tau": tau, "blh": blh})
