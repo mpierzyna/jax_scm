@@ -10,6 +10,14 @@ import pydantic
 from scm.config.yaml import yaml_to_dict
 
 
+class LogLevel(StrEnum):
+    """Verbosity for `simulate`."""
+
+    SILENT = "silent"  # nothing is printed
+    BOUNDARY = "boundary"  # only "begin" and "complete" messages
+    PROGRESS = "progress"  # boundary + per-outer-step progress with ETA
+
+
 class TimeIntMethod(StrEnum):
     """Time integration method."""
 
@@ -35,10 +43,9 @@ class Namelist(pydantic.BaseModel):
     # Output time step, seconds
     dt_s_out: float = 5 * 60.0  # 5 mins
 
-    # Whether to print advanced timing information and progress during simulation.
-    # Needs to be disabled when `simulate` is jitted, e.g., for ML training.
-    # todo: implement timer outside simulate function and only pass callback. Then jitting should work.
-    print_advanced_status: bool = True
+    # Verbosity of the simulation loop. SILENT is required when wrapping `simulate`
+    # in transforms that disallow host callbacks (e.g. some grad/vmap setups).
+    log_level: LogLevel = LogLevel.PROGRESS
 
     mo_n_iter: int = 10  # Number of iterations for MO solver. Increase for more accuracy, but also more runtime.
 

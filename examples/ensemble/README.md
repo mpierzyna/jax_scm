@@ -26,4 +26,4 @@ ens_out = jax.vmap(simulate_member)(B1_space)
 ```
 
 `vmap` vectorizes `simulate_member` over the leading B1 axis, running all members in a single JIT-compiled call. 
-`print_advanced_status` must be disabled in the `Namelist` for `simulate` to compile under `vmap`.
+`log_level` must be set to `LogLevel.SILENT` in the `Namelist` for `simulate` to compile under `vmap`.
