@@ -194,20 +194,20 @@ def plot_ic(sps: SimPlotSpec, *, axes: Tuple[plt.Axes, ...], labels: Tuple[str, 
     ax_u_v.set_ylabel("$z$, m")
     ax_u_v.set_ylim(0, sim.grid.H)
 
-    ax_th.plot(sim.init.th, sim.grid.z, label="th", color="C0")
+    ax_th.plot(sim.init.th, sim.grid.z, color="C0")
     _add_is_const(v=sim.init.th, ax=ax_th, x=0.5, y=0.5)
     ax_th.set_xlabel(f"{LABELS_PRETTY['th']}, {UNITS['th']}")
     _yticks_only(ax_th)
 
-    ax_qv.plot(sim.init.qv * 100, sim.grid.z, label="qv", color="C0")
+    ax_qv.plot(sim.init.qv * 100, sim.grid.z, color="C0")
     _add_is_const(v=sim.init.qv, ax=ax_qv, x=0.5, y=0.5)
     ax_qv.set_xlim(0, None)
     ax_qv.set_xlabel(f"{LABELS_PRETTY['qv']}, {UNITS['qv']}")
     _yticks_only(ax_qv)
 
-    ax_qke.plot(sim.init.qke, sim.grid.z, label="qke", color="C0")
+    ax_qke.plot(sim.init.qke / 2, sim.grid.z, color="C0")
     ax_qke.set_xlim(0, None)
-    ax_qke.set_xlabel(f"{LABELS_PRETTY['qke']}, {UNITS['qke']}")
+    ax_qke.set_xlabel(f"{LABELS_PRETTY['tke']}, {UNITS['qke']}")
     _yticks_only(ax_qke)
 
 
@@ -316,6 +316,7 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     _add_subplot_label(ax, "b", dx=-0.015)
     _plot_ref(ax, sps.ref_dir / "a94_fig3a.csv")
     ax.plot(tf, ds_pp["C_u"], **JAX_SCM_KW)
+    ax.axhline(1, color="k", ls="--", lw=0.75)
     ax.set_xlim(0, 10)
     _xticks_only(ax)
     ax.set_ylim(0, 2)
@@ -325,6 +326,7 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     _add_subplot_label(ax, "c", dx=-0.015)
     _plot_ref(ax, sps.ref_dir / "a94_fig3b.csv")
     ax.plot(tf, ds_pp["C_v"], **JAX_SCM_KW)
+    ax.axhline(1, color="k", ls="--", lw=0.75)
     ax.set_xlabel("$t f$, -")
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 3)
@@ -457,10 +459,39 @@ def plot_wg33_res(sps: SimPlotSpec) -> plt.Figure:
 
     gs_sub = gs[1, :].subgridspec(nrows=1, ncols=4)
 
-    # --- TKE budget at 14:00 ---
-    ref = _read_ref_csv(sps.ref_dir / "nn09_fig6.csv", sort="y")
+    # --- Mixed layer parameters scatter (Table 1) ---
+    def _annotate_scatter(ax: plt.Axes, label: str) -> None:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        vmin, vmax = min(xmin, ymin), max(xmax, ymax)
+        ax.plot([vmin, vmax], [vmin, vmax], color="k", ls="dotted", lw=0.75)
+        ax.set_xlabel(f"{label} (NN09)")
+        ax.set_ylabel(f"{label} (JAX-SCM)")
+
+    df = pd.read_csv(sps.ref_dir / "nn09_tab1.csv")
+
     ax = fig.add_subplot(gs_sub[0, 0])
     _add_subplot_label(ax, "g")
+    ax.scatter(df["zi"], ds_pp["zi"][1:], c=colors[1:], s=10)
+    ax.set_aspect("equal")
+    _annotate_scatter(ax, "$z_i$, m")
+
+    ax = fig.add_subplot(gs_sub[0, 1])
+    _add_subplot_label(ax, "h")
+    ax.scatter(df["neg_R"], -ds_pp["R"][1:], c=colors[1:], s=10)
+    ax.set_aspect("equal")
+    _annotate_scatter(ax, "$R$")
+
+    ax = fig.add_subplot(gs_sub[0, 2])
+    _add_subplot_label(ax, "i")
+    ax.scatter(df["w_st"], ds_pp["w_st"][1:], c=colors[1:], s=10)
+    ax.set_aspect("equal")
+    _annotate_scatter(ax, rf"$w_*$, {UNITS['u_st']}")
+
+    # --- TKE budget at 14:00 ---
+    ref = _read_ref_csv(sps.ref_dir / "nn09_fig6.csv", sort="y")
+    ax = fig.add_subplot(gs_sub[0, 3])
+    _add_subplot_label(ax, "j")
     ax.plot(*ref["S"], color="C0", **ref_kw)
     ax.plot(*ref["B"], color="C1", **ref_kw)
     ax.plot(*ref["T+P"], color="C2", **ref_kw)
@@ -478,36 +509,6 @@ def plot_wg33_res(sps: SimPlotSpec) -> plt.Figure:
     ax.set_xlabel(r"$\square\, z_i / w_*^3$, --")
     ax.set_ylabel("z, m")
     ax.legend(fontsize=6, loc="upper center", ncols=2)
-
-    # --- Mixed layer parameters scatter (Table 1) ---
-    def _annotate_scatter(ax: plt.Axes, label: str) -> None:
-        xmin, xmax = ax.get_xlim()
-        ymin, ymax = ax.get_ylim()
-        vmin, vmax = min(xmin, ymin), max(xmax, ymax)
-        ax.plot([vmin, vmax], [vmin, vmax], color="k", ls="dotted", lw=0.75)
-        ax.set_xlabel(f"{label} (NN09)")
-        ax.set_ylabel(f"{label} (JAX-SCM)")
-
-    df = pd.read_csv(sps.ref_dir / "nn09_tab1.csv")
-    c = np.linspace(0, 1, len(df))
-
-    ax = fig.add_subplot(gs_sub[0, 1])
-    _add_subplot_label(ax, "h")
-    ax.scatter(df["neg_R"], -ds_pp["R"][1:], c=c, s=10)
-    ax.set_aspect("equal")
-    _annotate_scatter(ax, "$-R$")
-
-    ax = fig.add_subplot(gs_sub[0, 2])
-    _add_subplot_label(ax, "i")
-    ax.scatter(df["zi"], ds_pp["zi"][1:], c=c, s=10)
-    ax.set_aspect("equal")
-    _annotate_scatter(ax, "$z_i$, m")
-
-    ax = fig.add_subplot(gs_sub[0, 3])
-    _add_subplot_label(ax, "j")
-    ax.scatter(df["w_st"], ds_pp["w_st"][1:], c=c, s=10)
-    ax.set_aspect("equal")
-    _annotate_scatter(ax, rf"$w_*$, {UNITS['u_st']}")
 
     return fig
 
