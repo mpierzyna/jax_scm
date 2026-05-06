@@ -115,5 +115,6 @@ def postproc_gabls1(ds: xr.Dataset) -> xr.Dataset:
     m = (ds["u"] ** 2 + ds["v"] ** 2) ** 0.5  # wind magnitude
     tau = (ds["u_w"] ** 2 + ds["v_w"] ** 2) ** 0.5  # total stress
     blh = (tau / tau.isel(zh=0)).where(lambda x: x < 0.05).idxmax("zh")  # blh where stress < 5% of surface stress
+    blh /= 0.95  # linear extrapolation (Cuxart et al 2006; Beare et al 2006)
 
     return xr.Dataset({"m": m, "tau": tau, "blh": blh})
