@@ -103,6 +103,7 @@ class SimPlotSpec:
     time_formatter: Callable[[float], str]
     time_label: str = "Time, s"
     time_n_ticks: int = 5
+    time_n_ticks_short: int = 3
     ref_dir: pathlib.Path | None = None
     out_file: pathlib.Path | None = None
 
@@ -124,9 +125,10 @@ sims = [
     SimPlotSpec(
         sim=sim_gab1,
         short_name="GAB1",
-        time_formatter=lambda t: f"{t / 60:.0f}",
-        time_label="$t$, min",
-        time_n_ticks=10,
+        time_formatter=lambda t: f"{t / 60 / 60:.0f}",
+        time_label="$t$, h",
+        time_n_ticks=4,
+        time_n_ticks_short=4,
         ref_dir=VAL_ROOT / "gabls1" / "ref_cuxart06",
         out_file=VAL_ROOT / "gabls1" / "out_cn.nc",
     ),
@@ -187,7 +189,7 @@ def plot_ic(sps: SimPlotSpec, *, axes: Tuple[plt.Axes, ...], labels: Tuple[str, 
     ax_u_v.plot(sim.init.u, sim.grid.z, label=LABELS_PRETTY["u"], color="C0")
     ax_u_v.plot(sim.init.v, sim.grid.z, label=LABELS_PRETTY["v"], color="C0", ls="dashed")
     _add_is_const(v=sim.init.u, ax=ax_u_v, x=0.5, y=0.5)
-    ax_u_v.legend(fontsize=6, loc="upper center")
+    ax_u_v.legend(fontsize=6, loc="upper right")
     ax_u_v.set_xlabel(f"Wind, {UNITS['u']}")
     ax_u_v.set_ylabel("$z$, m")
     ax_u_v.set_ylim(0, sim.grid.H)
@@ -219,7 +221,7 @@ def plot_bc(sps: SimPlotSpec, *, fig: plt.Figure, axes: Tuple[plt.Axes, ...], la
     sim = sps.sim
     t = jnp.linspace(sim.t_start_s, sim.t_end_s)
     t_ticks = jnp.linspace(sim.t_start_s, sim.t_end_s, sps.time_n_ticks)
-    t_ticks_ug = jnp.linspace(sim.t_start_s, sim.t_end_s, 3)
+    t_ticks_ug = jnp.linspace(sim.t_start_s, sim.t_end_s, sps.time_n_ticks_short)
 
     # Geostrophic forcing
     ug = jax.vmap(sim.forcing.u_geo)(t)
@@ -266,7 +268,7 @@ def plot_bc(sps: SimPlotSpec, *, fig: plt.Figure, axes: Tuple[plt.Axes, ...], la
 
 def plot_ic_bc(sps: SimPlotSpec) -> plt.Figure:
     """Plot initial conditions and boundary conditions for a given simulation."""
-    fig = plt.figure(constrained_layout=True, figsize=(FIG_WIDTH, 2))
+    fig = plt.figure(constrained_layout=True, figsize=(FIG_WIDTH, 1.75))
     gs = fig.add_gridspec(nrows=1, ncols=6, width_ratios=(1, 1, 1, 1, 1, 3))
     gs_ts = gs[0, -1].subgridspec(nrows=2, ncols=1)
 
@@ -513,13 +515,12 @@ def plot_wg33_res(sps: SimPlotSpec) -> plt.Figure:
 def plot_gabls1_res(sps: SimPlotSpec) -> plt.Figure:
     """Plot GABLS1 results against Cuxart et al. (2006) multi-model reference."""
 
-    def _plot_ref(ax: plt.Axes, path: pathlib.Path, sort: str = "x") -> None:
+    def _plot_ref(ax: plt.Axes, path: pathlib.Path, x_scale: float = 1, sort: str = "x") -> None:
         for x, y in _read_ref_csv(path, sort=sort).values():
-            ax.plot(x, y, **REF_KW)
+            ax.plot(x * x_scale, y, **REF_KW)
 
     ds = xr.open_dataset(sps.out_file)
     ds_pp = postproc_gabls1(ds)
-    t_min = ds["time"] * 60  # h to min
 
     fig = plt.figure(figsize=(FIG_WIDTH, FIG_WIDTH / 2), constrained_layout=True)
     gs = fig.add_gridspec(nrows=2, ncols=6)
@@ -580,20 +581,22 @@ def plot_gabls1_res(sps: SimPlotSpec) -> plt.Figure:
 
     ax = fig.add_subplot(gs_sub[0, 0])
     _add_subplot_label(ax, "g", dx=-0.015)
-    _plot_ref(ax, sps.ref_dir / "fig02_blh.csv", sort="x")
-    ax.plot(t_min, ds_pp["blh"], **JAX_SCM_KW)
-    ax.set_xlim(0, 540)
+    _plot_ref(ax, sps.ref_dir / "fig02_blh.csv", sort="x", x_scale=1 / 60)
+    ax.plot(ds["time"], ds_pp["blh"], **JAX_SCM_KW)
+    ax.set_xlim(0, 9)
+    ax.set_xticks(np.arange(0, 10, 1))
+    ax.set_xlabel(sps.time_label)
     ax.set_ylim(0, 400)
-    ax.set_xlabel("$t$, min")
     ax.set_ylabel("BLH, m")
 
     ax = fig.add_subplot(gs_sub[0, 1])
     _add_subplot_label(ax, "h", dx=-0.015)
-    _plot_ref(ax, sps.ref_dir / "fig02_ust.csv", sort="x")
-    ax.plot(t_min, ds["mo_u_st"], **JAX_SCM_KW)
-    ax.set_xlim(0, 540)
+    _plot_ref(ax, sps.ref_dir / "fig02_ust.csv", sort="x", x_scale=1 / 60)
+    ax.plot(ds["time"], ds["mo_u_st"], **JAX_SCM_KW)
+    ax.set_xlim(0, 9)
+    ax.set_xticks(np.arange(0, 10, 1))
+    ax.set_xlabel(sps.time_label)
     ax.set_ylim(0.2, 0.5)
-    ax.set_xlabel("$t$, min")
     ax.set_ylabel(f"{LABELS_PRETTY['u_st']}, {UNITS['u_st']}")
 
     handles = [
