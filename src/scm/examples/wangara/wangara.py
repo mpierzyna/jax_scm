@@ -96,14 +96,13 @@ def get_wangara_day33(Nz: int = 50) -> Simulation:
 def postproc_wangara(ds: xr.Dataset) -> xr.Dataset:
     """Get Wangara Day 33 diagnostics for validation plots."""
     # Inversion height as height of minimum sensible heatflux
-    zi = ds["zh"].isel(zh=ds["w_thv"].argmin("zh"))  # tab 1 caption
+    zi = ds["zh"].isel(zh=ds["w_th"].argmin("zh"))  # tab 1 caption
 
     # Heat flux at zi, normalized by surface flux
-    w_thv_s = ds["mo_w_thv"]
-    R = ds["w_thv"].sel(zh=zi) / w_thv_s  # m, tab 1 caption
+    R = ds["w_th"].sel(zh=zi) / ds["mo_w_th"]  # m, tab 1 caption
 
-    # Convective velocity scale
-    w_st = (consts.g / ds.attrs["th_ref"] * w_thv_s * zi) ** (1 / 3)  # m/s, tab 1 caption
+    # Convective velocity scale with BUOYANCY flux
+    w_st = (consts.g / ds.attrs["th_ref"] * ds["mo_w_thv"] * zi) ** (1 / 3)  # m/s, tab 1 caption
 
     # Normalized TKE budget. Divide by 2 for QKE to TKE.
     tke_scale = w_st**3 / zi
