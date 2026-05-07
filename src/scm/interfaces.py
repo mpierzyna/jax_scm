@@ -8,7 +8,7 @@ import location. Swapping the closure scheme means updating these imports.
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Protocol, Tuple, TypeVar, Union
+from typing import Callable, Protocol, Tuple, TypeVar, Union, List
 
 import jax.numpy as jnp
 import jax.tree_util
@@ -38,6 +38,53 @@ class Simulation:
 
     # Optional function to convert time array to datatime index or scaled index for output.
     t_index_fn: Callable[[jnp.ndarray], Union[pd.DatetimeIndex, jnp.ndarray]] | None = None
+
+    def update_init(
+        self,
+        *,
+        new_t_start_s: int,
+        new_init: ProgVarsMYNN = None,
+        **new_init_fields: jnp.ndarray,
+    ) -> Simulation:
+        """Return a copy of this simulation with updated initial conditions.
+
+        Provide either full `new_init` or individual fields which are used to update the existing initial condtions.
+        Both options require a `new_t_start_s` between the original `t_start_s` and `t_end_s` to ensure consistency
+        with forcing.
+
+        Parameters
+        ----------
+        new_t_start_s : int
+            New simulation start time in seconds.
+        new_init : ProgVarsMYNN, optional
+            New initial conditions for all prognostic variables.
+            If not provided, `new_init_fields` are used to update the existing initial conditions.
+        **new_init_fields : jnp.ndarray
+            Individual prognostic variable fields to update in the existing initial conditions.
+            Ignored if `new_init` is provided.
+
+        Returns
+        -------
+        Simulation
+            A new Simulation object with updated initial conditions and start time.
+        """
+        # Validate correct start time
+        if not (self.t_start_s <= new_t_start_s < self.t_end_s):
+            raise ValueError(
+                f"`new_t_start_s` must be between original "
+                f"`t_start_s` ({self.t_start_s}) and `t_end_s` ({self.t_end_s})."
+            )
+
+        if new_init is not None and new_init_fields:
+            raise ValueError("Provide either `new_init` or `new_init_fields`, not both.")
+
+        # Simply swap in new initial conditions.
+        if new_init is not None:
+            return dataclasses.replace(self, init=new_init, t_start_s=new_t_start_s)
+
+        # Update specified fields in the existing initial conditions.
+        updated_init = dataclasses.replace(self.init, **new_init_fields)
+        return dataclasses.replace(self, init=updated_init, t_start_s=new_t_start_s)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
