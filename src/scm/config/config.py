@@ -10,6 +10,28 @@ import pydantic
 from scm.config.yaml import yaml_to_dict
 
 
+class TimeIntMethod(StrEnum):
+    """Time integration method."""
+
+    IMPLICIT = "implicit"
+    EXPLICIT = "explicit"
+
+
+class AdaptiveTimestepConfig(pydantic.BaseModel):
+    cfl_max: float = 0.5  # Max CFL number for diffusion
+    dt_s_max: float = 10.0  # Maximum time step, seconds
+
+    @pydantic.field_validator("cfl_max")
+    @classmethod
+    def cfl_max_stable_for_ab2(cls, v: float) -> float:
+        if v > 0.5:
+            raise ValueError(
+                f"cfl_max={v} exceeds 0.5, which is outside the AB2 stability region "
+                "for diffusion.  Use cfl_max ≤ 0.5 or switch to implicit time stepping."
+            )
+        return v
+
+
 class LogLevel(StrEnum):
     """Verbosity for `simulate`."""
 
@@ -18,11 +40,9 @@ class LogLevel(StrEnum):
     STEPS = "steps"  # boundary + per-outer-step progress with ETA
 
 
-class TimeIntMethod(StrEnum):
-    """Time integration method."""
-
-    IMPLICIT = "implicit"
-    EXPLICIT = "explicit"
+class LogConfig(pydantic.BaseModel):
+    level: LogLevel = LogLevel.STEPS
+    log_every_n: int = 1  # Only log every n outer steps (ignored if level is not STEPS)
 
 
 class Namelist(pydantic.BaseModel):
@@ -43,9 +63,7 @@ class Namelist(pydantic.BaseModel):
     # Output time step, seconds
     dt_s_out: float = 5 * 60.0  # 5 mins
 
-    # Verbosity of the simulation loop. SILENT is required when wrapping `simulate`
-    # in transforms that disallow host callbacks (e.g. some grad/vmap setups).
-    log_level: LogLevel = LogLevel.STEPS
+    logging: LogConfig = LogConfig()
 
     mo_n_iter: int = 10  # Number of iterations for MO solver. Increase for more accuracy, but also more runtime.
 
@@ -60,21 +78,6 @@ class Namelist(pydantic.BaseModel):
     @property
     def is_implicit(self) -> bool:
         return self.time_int == TimeIntMethod.IMPLICIT
-
-
-class AdaptiveTimestepConfig(pydantic.BaseModel):
-    cfl_max: float = 0.5  # Max CFL number for diffusion
-    dt_s_max: float = 10.0  # Maximum time step, seconds
-
-    @pydantic.field_validator("cfl_max")
-    @classmethod
-    def cfl_max_stable_for_ab2(cls, v: float) -> float:
-        if v > 0.5:
-            raise ValueError(
-                f"cfl_max={v} exceeds 0.5, which is outside the AB2 stability region "
-                "for diffusion.  Use cfl_max ≤ 0.5 or switch to implicit time stepping."
-            )
-        return v
 
 
 def load_namelist(f: str | pathlib.Path) -> Namelist:

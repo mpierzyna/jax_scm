@@ -5,12 +5,15 @@ import jax.numpy as jnp
 import pytest
 
 from scm.examples.gabls1 import get_gabls1
-from scm.interfaces import Simulation
+from scm.interfaces import Output, Simulation
+
+Nz = 64
 
 
 @pytest.fixture
-def sim():
-    return get_gabls1(Nz=64)
+def sim() -> Simulation:
+    """GABLS1 simulation for testing."""
+    return get_gabls1(Nz=Nz)
 
 
 class TestUpdateInit:

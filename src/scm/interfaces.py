@@ -8,7 +8,7 @@ import location. Swapping the closure scheme means updating these imports.
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Protocol, Tuple, TypeVar, Union, List
+from typing import Callable, List, Protocol, Tuple, TypeVar, Union
 
 import jax.numpy as jnp
 import jax.tree_util

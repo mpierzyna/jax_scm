@@ -9,7 +9,7 @@ from scm.interfaces import ModelFn, Output, Simulation
 from scm.mynn.closure import MYNNParams
 from scm.time_stepping.explicit import get_ab2_step_fn, get_euler_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
-from scm.time_stepping.logging import make_logger
+from scm.time_stepping.logging import get_logger_from_cfg
 from scm.time_stepping.utils import StepCarry
 
 
@@ -20,7 +20,7 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
 
     # Prepare time coordinates
     t_outer = jnp.arange(sim.t_start_s, sim.t_end_s, cfg.dt_s_out)
-    logger = make_logger(cfg.log_level, n_outer=len(t_outer))
+    logger = get_logger_from_cfg(cfg=cfg.logging, n_total=len(t_outer))
 
     # Configure the time integration stepper.  Each `_step_fn` returns
     # (new_carry, output, info) where `info` is a dict of scalar JAX arrays

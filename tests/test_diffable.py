@@ -191,7 +191,7 @@ def test_e2e_diffable():
     cfg = load_namelist(FIXTURE_ROOT / "gabls1/namelist_cn.yaml")
     cfg.dt_s_out = cfg.dt_s_out  # output every step
 
-    cfg.log_level = LogLevel.SILENT  # avoid host callbacks under grad
+    cfg.logging.level = LogLevel.SILENT  # avoid host callbacks under grad
 
     # Setup a few steps of a simulation
     sim = get_gabls1(Nz=32)

@@ -1,6 +1,6 @@
-import xarray as xr
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import xarray as xr
 
 from scm.grid import StaggeredGrid
 from scm.interfaces import Forcing, Simulation

@@ -71,7 +71,7 @@ def test_e2e(case: str) -> None:
 
     ds = xr.open_dataset(fixture_dir / spec.out_file)
     cfg = load_namelist(fixture_dir / spec.namelist)
-    cfg.log_level = LogLevel.SILENT
+    cfg.logging.level = LogLevel.SILENT
 
     with jax.enable_x64():
         sim = spec.get_sim()

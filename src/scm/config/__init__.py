@@ -1,4 +1,11 @@
-from .config import AdaptiveTimestepConfig, LogLevel, Namelist, TimeIntMethod, load_namelist
+from .config import (
+    AdaptiveTimestepConfig,
+    LogConfig,
+    LogLevel,
+    Namelist,
+    TimeIntMethod,
+    load_namelist,
+)
 
 __all__ = [
     "Namelist",
@@ -6,4 +13,5 @@ __all__ = [
     "TimeIntMethod",
     "AdaptiveTimestepConfig",
     "LogLevel",
+    "LogConfig",
 ]
