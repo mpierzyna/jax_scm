@@ -91,7 +91,7 @@ def init_model(sim: Simulation, cfg: Namelist) -> ModelFn:
         if cfg.is_implicit:
             qke_tends = diag.qke_P_S + diag.qke_P_B  # dissipation semi-implicit in CN diagonal
         else:
-            qke_tends = diag.qke_P_S + diag.qke_P_B - diag.qke_eps + div_w_qke
+            qke_tends = diag.qke_P_S + diag.qke_P_B - diag.qke_eps - div_w_qke
 
         # If large scale tendencies not explicitly given,
         # estimate horizontal temperature advection from geostrophic wind (NN09, eq. 3).

@@ -214,7 +214,7 @@ def init_closure(grid: StaggeredGrid, th_ref: float) -> ClosureFn:
         w_qv = -Kh * grads.qv  # moisture flux, eq. 21, NN09
 
         # TKE turbulent transport
-        w_qke = Kq * grads.qke  # eq 24, MY82
+        w_qke = -Kq * grads.qke  # eq 24, MY82
 
         # Apply lower boundary conditions from MO before computing TKE budget
         u_w = u_w.at[0].set(mo_res.u_w)

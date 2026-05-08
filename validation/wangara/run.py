@@ -123,7 +123,7 @@ def make_report(ds: xr.Dataset, fname: str):
         ax.plot(*ref["D"], color="C3", **ref_kw)
         ax.plot(ds_tke_budget["tke_P_S"].values, ds["z"], color="C0", lw=1.5, label="Shear (S)")
         ax.plot(ds_tke_budget["tke_P_B"].values, ds["z"], color="C1", lw=1.5, label="Buoyancy (B)")
-        ax.plot(ds_tke_budget["div_w_tke"], ds["z"].values, color="C2", lw=1.5, label="Transport (T)")
+        ax.plot(-ds_tke_budget["div_w_tke"], ds["z"].values, color="C2", lw=1.5, label="Transport (T)")
         ax.plot(-ds_tke_budget["tke_eps"], ds["z"], color="C3", lw=1.5, label="Dissipation (-D)")
         ax.set_xlim(-1, 1)
         _add_ref_legend(ax)
