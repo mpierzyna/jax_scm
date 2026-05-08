@@ -12,7 +12,8 @@ license = "GPL-3.0-only"
 license-files = ["COPYING"]
 requires-python = ">=3.12"
 dependencies = [
-    "jax==0.9.*",
+    "jax==0.9.*;  sys_platform != 'linux'",
+    "jax[cuda]==0.9.*;  sys_platform == 'linux'",
     "matplotlib",
     "seaborn",
     "flax",
@@ -39,8 +40,6 @@ scm-ui = "scm_ui.cli:cli"
 [dependency-groups]
 dev = [
     "black",
-    "dvc>=3.64.1",
-    "dvc-ssh>=4.2.2",
     "ipykernel>=7.1.0",
     "pandas-stubs==2.3.3.*",
     "scipy-stubs==1.16.*",
