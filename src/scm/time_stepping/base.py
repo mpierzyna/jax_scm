@@ -67,6 +67,7 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
     init_carry: StepCarry = _warmup(t_outer[0], cfg.dt_s, sim.init, params)
 
     def _outer_body(carry, t):
+        # todo: out is just a copy of new_carry. Thus, it contains tendencies which cause memory overhead. fix this.
         new_carry, out, info = _step_fn(carry, t, cfg.dt_s_out)
         logger.on_outer_step(t + cfg.dt_s_out, info)
         return new_carry, out
