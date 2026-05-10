@@ -28,13 +28,15 @@ uv run python -c "import scm; print('OK')"
 
 ## Quick Start
 
+Run your own simulations from the `workspaces/` directory. Create a new file, e.g., `my_run.py` in a subdirectory and
+set up the simulation as follows.
+
 All simulation parameters (initial conditions, forcing, time stepping, ...) are controlled by the `Simulation`
 object. See examples in [`scm.examples`](src/scm/examples). Once the `Simulation` is built, initialize a `Model` and
 run the time-stepping loop with `simulate()`. The output is a dictionary of arrays, which can be converted to an
 `xarray.Dataset` for analysis and export.
 
 ```python
-import jax
 from scm.config import Namelist, TimeIntMethod
 from scm.examples.gabls1 import get_gabls1
 from scm.io.local import out_to_ds
@@ -48,6 +50,12 @@ out = simulate(model=model, sim=sim, cfg=cfg)
 
 ds = out_to_ds(out=out, sim=sim)  # convert to xarray Dataset
 ds.to_netcdf("out.nc")
+```
+
+Run the simulation as
+
+```bash
+uv run python my_run.py
 ```
 
 ### The `Simulation` object
