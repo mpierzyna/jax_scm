@@ -2,16 +2,16 @@ import dataclasses
 
 import jax.numpy as jnp
 import jax.tree
-import numpy.random
+import numpy as np
 import pytest
 import xarray as xr
+from shared import FIXTURE_ROOT
 
 from scm.examples.gabls1 import get_gabls1
 from scm.interfaces import Output, Simulation
 from scm.io.local import ds_to_dataclass
 from scm.mo import MOResult
 from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN
-from tests.shared import FIXTURE_ROOT
 
 Nz = 64
 
@@ -146,7 +146,7 @@ class TestOutput:
 
     def test_masking(self, out: Output):
         """Select subset using mask"""
-        mask = numpy.random.uniform(size=len(out))
+        mask = np.random.uniform(size=len(out))
         mask = mask < 0.5
         out_ = out[mask]
         assert len(out_) == mask.sum()

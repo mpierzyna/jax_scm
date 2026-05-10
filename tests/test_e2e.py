@@ -1,6 +1,7 @@
 from typing import Callable, NamedTuple
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
@@ -93,3 +94,56 @@ def test_e2e(case: str) -> None:
 
         rel_err = np.abs((ds[var].values - ds_new[var].values) / ref_mean).max()
         assert rel_err < 1e-5, f"Variable {var} differs between runs by more than 1e-5 relative error"
+
+
+def test_split_sim() -> None:
+    """Test that reference simulation output can be split, run separately, and concatenated back together to match the original output."""
+    # Run full trajectory
+    spec = CASES["gabls1_ab2"]
+    fixture_dir = FIXTURE_ROOT / spec.fixture_dir
+
+    cfg = load_namelist(fixture_dir / spec.namelist)
+    cfg.logging.level = LogLevel.SILENT
+
+    with jax.enable_x64():
+        sim = spec.get_sim()
+        model = init_model(sim, cfg=cfg)
+        out_ref = simulate(model=model, sim=sim, cfg=cfg)
+
+    out_1h = out_ref[out_ref.t_s % 3600 == 0]  # Select every hour
+    out_1h = out_1h[1:-1]  # skip first and last hours
+
+    # Create sub simulations
+    sims = []
+    for out_ in out_1h:
+        sim_ = sim.update_init(
+            new_t_start_s=int(out_.t_s),
+            new_init=out_.state_traj,
+        )
+        sim_.t_end_s = sim_.t_start_s + 3600
+        sims.append(sim_)
+
+    # Run all sub sims
+    with jax.enable_x64():
+        model = init_model(sim, cfg=cfg)
+        out_split = []
+        for sim_ in sims:
+            out_ = simulate(model=model, sim=sim_, cfg=cfg)
+            out_ = out_[:-1]  # remove last point to avoid overlap
+            out_split.append(out_)
+
+        # Concat results
+        out_concat = out_split[0]
+        for out_ in out_split[1:]:
+            out_concat = jax.tree_util.tree_map(lambda a, b: jnp.concatenate([a, b]), out_concat, out_)
+
+        # Compare to reference
+        out_ref = out_ref[out_ref.t_s >= 3600]  # skip first hour (spinup)
+        out_ref = out_ref[:-1]  # skip last because removed in sim iter
+
+        # Compare
+        err = jax.tree.map(lambda x, x_: jnp.mean((x - x_) ** 2), out_concat, out_ref)
+        err, _ = jax.tree.flatten(err)
+        err = jnp.array(err)
+        assert jnp.mean(err) < 1e-6
+        assert jnp.max(err) < 1e-4
