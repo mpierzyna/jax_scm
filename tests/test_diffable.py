@@ -195,7 +195,7 @@ def test_e2e_diffable():
 
     # Setup a few steps of a simulation
     sim = get_gabls1(Nz=32)
-    sim.t_end_s = int(cfg.dt_s * 100)
+    sim.update(t_end_s=int(cfg.dt_s * 100))
     model = init_model(sim=sim, cfg=cfg)
 
     @jax.jit

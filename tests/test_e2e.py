@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
+
 from shared import FIXTURE_ROOT
 
 from scm.config import LogLevel, load_namelist
@@ -120,7 +121,7 @@ def test_split_sim() -> None:
             new_t_start_s=int(out_.t_s),
             new_init=out_.state_traj,
         )
-        sim_.t_end_s = sim_.t_start_s + 3600
+        sim_ = sim_.update(t_end_s=sim_.t_start_s + 3600)
         sims.append(sim_)
 
     # Run all sub sims
@@ -147,3 +148,8 @@ def test_split_sim() -> None:
         err = jnp.array(err)
         assert jnp.mean(err) < 1e-6
         assert jnp.max(err) < 1e-4
+
+
+# def test_run_pmap():
+#     sims = [get_gabls1(Nz=64) for _ in range(4)]
+#     sims = jnp.array(sims)

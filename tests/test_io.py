@@ -62,7 +62,7 @@ def test_ds_metadata():
 
     # Run simulation normally
     sim = get_gabls1(Nz=16)
-    sim.t_end_s = 60  # shorten simulation for test speed
+    sim = sim.update(t_end_s=60)  # shorten simulation for test speed
     model = init_model(sim, cfg=cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
     ds = out_to_ds(out=out, sim=sim)
@@ -78,7 +78,7 @@ def test_to_nc(tmpdir):
 
     # Run simulation normally
     sim = get_gabls1(Nz=16)
-    sim.t_end_s = 60  # shorten simulation for test speed
+    sim = sim.update(t_end_s=60)  # shorten simulation for test speed
     model = init_model(sim, cfg=cfg)
     out = simulate(model=model, sim=sim, cfg=cfg)
 

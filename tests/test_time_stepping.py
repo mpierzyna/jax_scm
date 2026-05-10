@@ -39,7 +39,7 @@ def test_time_stepping_configs(cfg):
 
     # Setup short simulation (3h to make it over the initial Km build up)
     sim = get_gabls1()
-    sim.t_end_s = 3 * 60 * 60  # 3 hours
+    sim = sim.update(t_end_s=3 * 60 * 60)  # 3 hours
 
     # Initialize model (implicit must be True for implicit time stepping)
     model = init_model(sim, cfg)

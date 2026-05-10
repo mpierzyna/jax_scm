@@ -22,7 +22,8 @@ from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN
 ParamsT = TypeVar("ParamsT")
 
 
-@dataclasses.dataclass
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class Simulation:
     """Simulation setup container."""
 
@@ -86,7 +87,16 @@ class Simulation:
         updated_init = dataclasses.replace(self.init, **new_init_fields)
         return dataclasses.replace(self, init=updated_init, t_start_s=new_t_start_s)
 
+    def update(self, **kwargs) -> Simulation:
+        """Convenience method to update any Simulation field EXCEPT init"""
+        if "init" in kwargs:
+            raise ValueError(
+                "Use `update_init` to update initial conditions, which ensures consistency with t_start_s."
+            )
+        return dataclasses.replace(self, **kwargs)
 
+
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Forcing:
     # Geostrophic wind components
