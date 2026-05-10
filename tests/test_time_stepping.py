@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
 
-from scm.config import AdaptiveTimestepConfig, Namelist, TimeIntMethod, LogLevel
+from scm.config import AdaptiveTimestepConfig, LogLevel, Namelist, TimeIntMethod
 from scm.examples.gabls1 import get_gabls1
 from scm.mynn.model import init_model
 from scm.time_stepping import simulate

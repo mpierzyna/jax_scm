@@ -1,11 +1,17 @@
 import dataclasses
 
-import jax
 import jax.numpy as jnp
+import jax.tree
+import numpy.random
 import pytest
+import xarray as xr
 
 from scm.examples.gabls1 import get_gabls1
 from scm.interfaces import Output, Simulation
+from scm.io.local import ds_to_dataclass
+from scm.mo import MOResult
+from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN
+from tests.shared import FIXTURE_ROOT
 
 Nz = 64
 
@@ -14,6 +20,16 @@ Nz = 64
 def sim() -> Simulation:
     """GABLS1 simulation for testing."""
     return get_gabls1(Nz=Nz)
+
+
+@pytest.fixture
+def out() -> Output:
+    ds = xr.open_dataset(FIXTURE_ROOT / "gabls1/out_ab2.nc")
+    state_traj = ds_to_dataclass(ds, ProgVarsMYNN)
+    diag_traj = ds_to_dataclass(ds, DiagVarsMYNN)
+    mo_traj = ds_to_dataclass(ds, MOResult, prefix="mo")
+    t_s = jnp.array(ds["_t_s"].values)
+    return Output(state_traj=state_traj, diag_traj=diag_traj, mo_traj=mo_traj, t_s=t_s)
 
 
 class TestUpdateInit:
@@ -99,3 +115,33 @@ class TestUpdateInit:
         assert updated.grid is sim.grid
         assert updated.mo_settings is sim.mo_settings
         assert updated.th_ref == sim.th_ref
+
+
+class TestOutput:
+    def test_single(self, out: Output):
+        """Select single timestep and check that flattened"""
+        i = 10
+        out_ = out[i]
+
+        # Dimensionality of all variables should be one less (time dimension removed)
+        dims = jax.tree.map(lambda x: x.ndim - 1, out)
+        dims_ = jax.tree.map(lambda x: x.ndim, out_)
+        assert dims == dims_
+
+        # Compare
+        comp = jax.tree.map(lambda x, x_: jnp.allclose(x[i], x_), out, out_)
+        comp, _ = jax.tree.flatten(comp)
+        assert jnp.all(jnp.array(comp))
+
+    def test_slicing(self, out: Output):
+        out_ = out[:100]  # first 100 steps
+        assert len(out_) == 100
+
+        out__ = out_[::5]  # every 5th sample
+        assert len(out__) == 20
+
+    def test_masking(self, out: Output):
+        mask = numpy.random.uniform(size=len(out))
+        mask = mask < 0.5
+        out_ = out[mask]
+        assert len(out_) == mask.sum()

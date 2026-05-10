@@ -273,7 +273,7 @@ def run(use_lf: bool):
         time=pd.date_range(
             "2006-07-01T12:00",
             freq=f"{cfg.dt_s_out:.0f}s",
-            periods=out.n_steps,
+            periods=len(out),
         ),
     )
     ds.to_netcdf(f"out_{sim.grid.Nz}_{'lf' if use_lf else 'no_lf'}.nc")

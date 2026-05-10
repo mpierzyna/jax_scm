@@ -144,9 +144,12 @@ class Output:
     mo_traj: MOResult
     t_s: jnp.ndarray
 
-    @property
-    def n_steps(self) -> int:
+    def __len__(self) -> int:
         return len(self.t_s)
+
+    def __getitem__(self, item) -> Output:
+        """Subset output"""
+        return jax.tree_util.tree_map(lambda x: x[item], self)
 
 
 class ModelFn(Protocol[ParamsT]):
