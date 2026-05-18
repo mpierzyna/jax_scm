@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from shutil import which
 from typing import Callable, Tuple
 
 import jax
@@ -118,7 +117,7 @@ sims = [
         short_name="A94",
         time_formatter=lambda t: f"{t * sim_a94.forcing.f_c:.0f}",
         time_n_ticks=6,
-        time_label="$t f$, --",
+        time_label="$t f_c$, --",
         ref_dir=VAL_ROOT / "andren1994" / "ref",
         out_file=VAL_ROOT / "andren1994" / "out_cn.nc",
     ),
@@ -295,6 +294,19 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
         for label, (x, y) in _read_ref_csv(path, sort=sort).items():
             ax.plot(x, y, label=label, **REF_KW)
 
+    def _add_avg_period(ax: plt.Axes):
+        """Indicate averaging period (last 3 inertial periods) with grey shading."""
+        ax.fill_between(
+            x=[7, 10],
+            y1=0,
+            y2=1,
+            color="lightgrey",
+            edgecolor="none",
+            alpha=0.25,
+            zorder=-10,
+            transform=ax.get_xaxis_transform(),
+        )
+
     ds = xr.open_dataset(sps.out_file)
     ds_pp = postproc_andren1994(ds)
     tf = ds["time"]  # time in dataframe is normalized with f, so tf = t * f
@@ -307,16 +319,18 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     _add_subplot_label(ax, "a", dx=-0.015)
     _plot_ref(ax, sps.ref_dir / "a94_fig2.csv")
     ax.plot(tf, ds_pp["tke_int_norm"], **JAX_SCM_KW)
+    _add_avg_period(ax)
     ax.set_xlim(0, 10)
     _xticks_only(ax)
     ax.set_ylim(0, 1.25)
-    ax.set_ylabel(r"$f \int q^2/2\,dz / u_*^3$")
+    ax.set_ylabel(r"$f_c \int q^2/2\,dz / u_*^3$")
 
     ax = fig.add_subplot(gs[1, 0], sharex=ax)
     _add_subplot_label(ax, "b", dx=-0.015)
     _plot_ref(ax, sps.ref_dir / "a94_fig3a.csv")
     ax.plot(tf, ds_pp["C_u"], **JAX_SCM_KW)
     ax.axhline(1, color="k", ls="--", lw=0.75)
+    _add_avg_period(ax)
     ax.set_xlim(0, 10)
     _xticks_only(ax)
     ax.set_ylim(0, 2)
@@ -327,7 +341,8 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     _plot_ref(ax, sps.ref_dir / "a94_fig3b.csv")
     ax.plot(tf, ds_pp["C_v"], **JAX_SCM_KW)
     ax.axhline(1, color="k", ls="--", lw=0.75)
-    ax.set_xlabel("$t f$, -")
+    _add_avg_period(ax)
+    ax.set_xlabel("$t f_c$, -")
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 3)
     ax.set_ylabel(r"$C_v$")
@@ -336,7 +351,7 @@ def plot_a94_res(sps: SimPlotSpec) -> plt.Figure:
     gs_sub = gs[3, :].subgridspec(nrows=1, ncols=2, width_ratios=(1, 1))
 
     label_ust = LABELS_PRETTY["u_st"][1:-1]
-    label_z_norm = rf"$z\,f/{label_ust}$"
+    label_z_norm = rf"$z\,f_c/{label_ust}$"
 
     ax_uw = fig.add_subplot(gs_sub[0, 0])
     _add_subplot_label(ax_uw, "d")
