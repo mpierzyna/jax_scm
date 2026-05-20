@@ -53,7 +53,7 @@ LABELS_PRETTY = {
     "tke": r"$q^2/2$",
     # Turb stats
     "w_th": r"$\langle w \theta \rangle$",
-    "w_qv": r"$\langle w {q_v} \rangle$",
+    "w_qv": r"$\langle w\,{q_v} \rangle$",
     "u_w": r"$\langle u w \rangle$",
     "v_w": r"$\langle v w \rangle$",
     "u_st": r"$u_*$",
@@ -603,7 +603,7 @@ def plot_gabls1_res(sps: SimPlotSpec) -> plt.Figure:
     ax.set_xticks(np.arange(0, 10, 1))
     ax.set_xlabel(sps.time_label)
     ax.set_ylim(0, 400)
-    ax.set_ylabel("BLH, m")
+    ax.set_ylabel("$h$, m")
 
     ax = fig.add_subplot(gs_sub[0, 1])
     _add_subplot_label(ax, "h", dx=-0.015)

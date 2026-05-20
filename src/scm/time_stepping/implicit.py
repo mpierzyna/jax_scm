@@ -35,6 +35,10 @@ Semi-implicit QKE dissipation
     r = ε/qke = √qke/(B1·L)   [s⁻¹]
 evaluated at the current step and passed as the ``decay`` argument to ``cn_solve_1d``.
 The implicit form φⁿ⁺¹ = φⁿ/(1 + dt·r) is unconditionally positive.
+
+In other words, we factor qke out into (qke_new)*(qke_old)^{1/2}/(B1 L_old), where
+the decay rate r = (qke_old)^{1/2}/(B1 L_old) is kept fixed during CN solve and qke_new is solved
+implicitly by CN.
 """
 
 from __future__ import annotations
@@ -153,6 +157,7 @@ def get_cn_step_fn(
             ]
         )
 
+        # Factor qke (q^2) out to create quasi-linear decay term for implicit solver.
         qke_decay = diag.qke_eps / jnp.clip(y.qke, min=consts.qke_min)
         decay = jnp.zeros_like(phi).at[4].set(qke_decay)  # (5, Nz)
 
