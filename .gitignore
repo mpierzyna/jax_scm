@@ -183,6 +183,3 @@ pyrightconfig.json
 
 # Backup of copyrighted reference figures (removed from git history)
 /validation_ref_figures_backup.tar.gz
-# Ref figure directories (copyrighted, not to be re-added)
-validation/*/ref/
-validation/*/ref_*/
