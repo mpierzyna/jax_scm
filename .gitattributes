@@ -1,3 +1,4 @@
 *.nc filter=lfs diff=lfs merge=lfs -text
 *.nc.unpatched filter=lfs diff=lfs merge=lfs -text
 *.ipynb filter=strip-notebook-output
+validation/**/*.html linguist-generated=true
