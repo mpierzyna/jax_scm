@@ -5,18 +5,16 @@ build-backend = "hatchling.build"
 [project]
 name = "jax_scm"
 author = { name = "Maximilian Pierzyna", email = "mail@maximilian-pierzyna.de" }
-version = "1.0.0-rc1"
-description = "An atmospheric single column model with numerical and machine learning components written in jax."
+version = "1.0.0-rc2"
+description = "A modern atmospheric single-column model, implemented in Python and JAX"
 readme = "README.md"
 license = "GPL-3.0-only"
 license-files = ["COPYING"]
 requires-python = ">=3.12"
 dependencies = [
-    "jax==0.9.*;  sys_platform != 'linux'",
-    "jax[cuda]==0.9.*;  sys_platform == 'linux'",
+    "jax==0.9.*",
     "matplotlib",
     "seaborn",
-    "flax",
     "xarray>=2026.1.0",
     "pytest>=9.0.1",
     "jinja2>=3.1.6",
@@ -36,6 +34,15 @@ dependencies = [
 
 [project.scripts]
 scm-ui = "scm_ui.cli:cli"
+
+[project.optional-dependencies]
+# To install with GPU support, use `pip install jax_scm[cuda]`
+cuda = ["jax[cuda]==0.9.*"]
+
+# To install with machine learning support, use `pip install jax_scm[ml]`
+ml = [
+    "flax",
+]
 
 [dependency-groups]
 dev = [
