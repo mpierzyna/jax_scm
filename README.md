@@ -7,6 +7,8 @@ JAX-SCM is a modern single-column model (SCM) for atmospheric boundary layer sim
 in [JAX](https://github.com/jax-ml/jax). It implements the MYNN 2.5 turbulence closure with Monin-Obukhov surface layer
 coupling, and is designed for research use.
 
+![Wangara Day 33 simulation](docs/res_WG33.png)
+
 For technical details and to cite JAX-SCM, see the preprint:
 
 > Pierzyna, Maximilian. “JAX-SCM v1.0: A Modern Atmospheric Single-Column Model for Boundary Layer Research.”

@@ -647,3 +647,4 @@ if __name__ == "__main__":
 
     fig_wg33 = plot_wg33_res(sps_wg33)
     fig_wg33.savefig(FIG_ROOT / "res_WG33.pdf")
+    fig_wg33.savefig(FIG_ROOT / "res_WG33.png", dpi=300)
