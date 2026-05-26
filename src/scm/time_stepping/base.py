@@ -37,13 +37,9 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
 
     Returns
     -------
-    Output
-        JAX-registered dataclass with fields:
-
-        * ``state_traj`` — ``ProgVarsMYNN`` stacked over ``(N_out + 1,)`` time steps.
-        * ``diag_traj``  — ``DiagVarsMYNN`` stacked over ``(N_out + 1,)`` time steps.
-        * ``mo_traj``    — ``MOResult`` stacked over ``(N_out + 1,)`` time steps.
-        * ``t_s``        — 1-D array of output times in seconds, length ``N_out + 1``.
+    scm.interfaces.Output
+        Stacked trajectory of model state, diagnosed variables, and
+        surface layer results. Shape is `(N_out+1, ...)`.
 
     Notes
     -----

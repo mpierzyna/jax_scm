@@ -1,5 +1,3 @@
-"""Vertical staggered grid definition and visualisation utility."""
-
 import dataclasses
 
 import jax.numpy as jnp

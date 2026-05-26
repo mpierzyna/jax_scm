@@ -1,9 +1,4 @@
-"""Thermodynamic and atmospheric conversion utilities.
-
-Provides functions for temperature conversions (dry/virtual/potential),
-surface flux conversions, pressure/density profile integration,
-geostrophic wind computation, and the Coriolis parameter.
-"""
+"""Thermodynamic and atmospheric conversion utilities."""
 
 from __future__ import annotations
 

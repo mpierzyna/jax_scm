@@ -22,6 +22,118 @@ from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN
 ParamsT = TypeVar("ParamsT")
 
 
+class ModelFn(Protocol[ParamsT]):
+    def __call__(
+        self,
+        t_s: jnp.ndarray,
+        state: ProgVarsMYNN,
+        params: ParamsT,
+    ) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
+        """Protocol defining a model function that computes tendencies for time integration.
+        In other words, this is the right-hand side f(t, y) of dy/dt.
+
+        Parameters
+        ----------
+        t_s : jnp.ndarray
+            Current simulation time in seconds (scalar).
+        state : ProgVarsMYNN
+            Prognostic state on full levels at the current time step.
+        params : ParamsT
+            Closure parameters forwarded to the turbulence scheme.
+
+        Returns
+        -------
+        ProgVarsMYNN
+            Tendencies (time derivatives) for every prognostic variable.
+        DiagVarsMYNN
+            Diagnostic fields computed during the tendency evaluation.
+        MOResult
+            Surface-layer result from the Monin-Obukhov solver.
+        """
+
+
+class ClosureFn(Protocol[ParamsT]):
+    """Protocol defining a closure function that takes model state and
+    returns diagnosed closure variables (e.g., fluxes).
+
+    Parameters
+    ----------
+    state : ProgVarsMYNN
+        Prognostic state on full levels (Nz elements per field).
+    grads : GradVarsMYNN
+        Vertical gradients on half-levels (Nz+1 elements).
+    mo_res : MOResult
+        Monin-Obukhov surface-layer result for lower boundary conditions.
+    params : ParamsT
+        Closure parameters (physical constants or ML weights). Explicit so
+        they are visible to ``jax.grad`` for optimization.
+
+    Returns
+    -------
+    DiagVarsMYNN
+        Diagnostic fields computed by the closure.
+    """
+
+    def __call__(
+        self,
+        state: ProgVarsMYNN,
+        grads: GradVarsMYNN,
+        mo_res: MOResult,
+        params: ParamsT,
+    ) -> DiagVarsMYNN: ...
+
+
+class ForceSingleFn(Protocol):
+    """Protocol defining function that returns forcing values for a single variable at time ``t_s``.
+
+    Functions implementing this protocol take/return variables specified below.
+
+    Parameters
+    ----------
+    t_s : jnp.ndarray
+        Simulation time in seconds (scalar).
+
+    Returns
+    -------
+    jnp.ndarray
+        Scalar for surface quantities; shape ``(Nz,)`` for column quantities.
+    """
+
+    def __call__(self, t_s: jnp.ndarray) -> jnp.ndarray: ...
+
+
+class ForceTendsFn(Protocol):
+    """Protocol defining function that returns large-scale tendencies to add to the turbulence-driven tendencies.
+
+    Functions implementing this protocol take/return variables specified below.
+
+    Parameters
+    ----------
+    t_s : jnp.ndarray
+        Simulation time in seconds (scalar).
+    state : ProgVarsMYNN
+        Current prognostic state on full levels.
+    grads : GradVarsMYNN
+        Vertical gradients of the prognostic state on half-levels.
+    diag : DiagVarsMYNN
+        Diagnostic fields from the turbulence closure at the current step.
+
+    Returns
+    -------
+    ProgVarsMYNN
+        Large-scale tendency increments on full levels, added directly to
+        the model tendencies before time integration.
+    """
+
+    def __call__(
+        self,
+        t_s: jnp.ndarray,
+        state: ProgVarsMYNN,
+        grads: GradVarsMYNN,
+        diag: DiagVarsMYNN,
+    ) -> ProgVarsMYNN: ...
+
+
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Simulation:
@@ -179,86 +291,3 @@ class Output:
 
         for i in range(len(self)):
             yield self[i]
-
-
-class ModelFn(Protocol[ParamsT]):
-    def __call__(
-        self, t_s: jnp.ndarray, state: ProgVarsMYNN, params: ParamsT
-    ) -> Tuple[ProgVarsMYNN, DiagVarsMYNN, MOResult]:
-        """Compute tendencies — the right-hand side of the prognostic ODEs.
-
-        Parameters
-        ----------
-        t_s : jnp.ndarray
-            Current simulation time in seconds (scalar).
-        state : ProgVarsMYNN
-            Prognostic state on full levels at the current time step.
-        params : ParamsT
-            Closure parameters forwarded to the turbulence scheme.
-
-        Returns
-        -------
-        ProgVarsMYNN
-            Tendencies (time derivatives) for every prognostic variable.
-        DiagVarsMYNN
-            Diagnostic fields computed during the tendency evaluation.
-        MOResult
-            Surface-layer result from the Monin-Obukhov solver.
-        """
-
-
-class ClosureFn(Protocol[ParamsT]):
-    def __call__(self, state: ProgVarsMYNN, grads: GradVarsMYNN, mo_res: MOResult, params: ParamsT) -> DiagVarsMYNN:
-        """Compute closure terms for prognostic variables.
-
-        Parameters
-        ----------
-        state : ProgVarsMYNN
-            Prognostic state on full levels (Nz elements per field).
-        grads : GradVarsMYNN
-            Vertical gradients on half-levels (Nz+1 elements).
-        mo_res : MOResult
-            Monin-Obukhov surface-layer result for lower boundary conditions.
-        params : ParamsT
-            Closure parameters (physical constants or ML weights). Explicit so
-            they are visible to ``jax.grad`` for optimization.
-        """
-
-
-class ForceSingleFn(Protocol):
-    def __call__(self, t_s: jnp.ndarray) -> jnp.ndarray:
-        """Return forcing values for a single variable at time ``t_s``.
-
-        Parameters
-        ----------
-        t_s : jnp.ndarray
-            Simulation time in seconds (scalar).
-
-        Returns
-        -------
-        jnp.ndarray
-            Scalar for surface quantities; shape ``(Nz,)`` for column quantities.
-        """
-
-
-class ForceTendsFn(Protocol):
-    def __call__(self, t_s: jnp.ndarray, state: ProgVarsMYNN, grads: GradVarsMYNN, diag: DiagVarsMYNN) -> ProgVarsMYNN:
-        """Return large-scale tendencies to add to the turbulence-driven tendencies.
-
-        Parameters
-        ----------
-        t_s : jnp.ndarray
-            Simulation time in seconds (scalar).
-        state : ProgVarsMYNN
-            Current prognostic state on full levels.
-        grads : GradVarsMYNN
-            Vertical gradients of the prognostic state on half-levels.
-        diag : DiagVarsMYNN
-            Diagnostic fields from the turbulence closure at the current step.
-
-        Returns
-        -------
-        ProgVarsMYNN
-            Large-scale tendency increments on full levels, added directly to
-            the model tendencies before time integration.
-        """

@@ -1,5 +1,3 @@
-"""First-order vertical finite-difference operators on the staggered grid."""
-
 from __future__ import annotations
 
 from jax import numpy as jnp

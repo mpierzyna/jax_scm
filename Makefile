@@ -27,7 +27,7 @@ lint:
 	uv run ruff check --watch
 
 docs:
-	uv run pdoc scm --output-dir site/
+	uv run pdoc scm --output-dir site/ --docformat numpy
 	find validation -name "report_*.html" | while read f; do \
 	    dir=site/$$(dirname "$$f"); \
 	    mkdir -p "$$dir"; \

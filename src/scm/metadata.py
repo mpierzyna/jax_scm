@@ -1,5 +1,3 @@
-"""Utilities for attaching CF-convention metadata to dataclass fields."""
-
 from __future__ import annotations
 
 import dataclasses
