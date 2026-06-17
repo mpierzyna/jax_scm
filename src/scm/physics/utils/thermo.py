@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypeVar
+from typing import Literal
 
 import jax
-import pandas as pd
-import xarray as xr
 from jax import numpy as jnp
 
 from scm import consts
-
-# Type variable for functions that perform pure computations without library specific functions
-T = TypeVar("T", jax.Array, xr.DataArray, pd.Series)
+from scm.physics.utils.base import ArrayT
 
 
-def tv_to_t(*, tv: T, qv: T) -> T:
+def tv_to_t(*, tv: ArrayT, qv: ArrayT) -> ArrayT:
     """Convert virtual temperature to dry temperature.
 
     Parameters
@@ -33,7 +29,7 @@ def tv_to_t(*, tv: T, qv: T) -> T:
     return tv / (1 + 0.61 * qv)
 
 
-def t_to_tv(*, t: T, qv: T) -> T:
+def t_to_tv(*, t: ArrayT, qv: ArrayT) -> ArrayT:
     """Convert dry temperature to virtual temperature.
 
     Parameters
@@ -51,8 +47,8 @@ def t_to_tv(*, t: T, qv: T) -> T:
     return t * (1 + 0.61 * qv)
 
 
-def tk_to_th(*, tk: T, p_hPa: T) -> T:
-    """Convert temperature (K) to potential temperature (K).
+def tk_to_th(*, tk: ArrayT, p_hPa: ArrayT) -> ArrayT:
+    """Convert absolute temperature (K) to potential temperature (K).
 
     Parameters
     ----------
@@ -68,11 +64,32 @@ def tk_to_th(*, tk: T, p_hPa: T) -> T:
     """
     p0_hPa = 1000.0  # Reference pressure in hPa
     exp = (consts.gamma - 1) / consts.gamma
-    th_k = tk * (p0_hPa / p_hPa) ** exp
-    return th_k
+    th = tk * (p0_hPa / p_hPa) ** exp
+    return th
 
 
-def w_th_to_w_thv(*, th: T, w_th: T, w_qv: T) -> T:
+def th_to_tk(*, th: ArrayT, p_hPa: ArrayT) -> ArrayT:
+    """Convert potential temperature (K) to absolute temperature (K).
+
+    Parameters
+    ----------
+    th : xr.DataArray
+        Potential temperature in Kelvin.
+    p_hPa : xr.DataArray
+        Pressure in hPa.
+
+    Returns
+    -------
+    xr.DataArray
+        Temperature in Kelvin.
+    """
+    p0_hPa = 1000.0  # Reference pressure in hPa
+    exp = (consts.gamma - 1) / consts.gamma
+    tk = th / (p0_hPa / p_hPa) ** exp
+    return tk
+
+
+def w_th_to_w_thv(*, th: ArrayT, w_th: ArrayT, w_qv: ArrayT) -> ArrayT:
     """Convert sensible heat flux (w'theta') to buoyancy flux (w'theta_v').
 
     Parameters
@@ -92,7 +109,7 @@ def w_th_to_w_thv(*, th: T, w_th: T, w_qv: T) -> T:
     return w_th + 0.61 * th * w_qv
 
 
-def w_thv_to_w_th(*, th: T, w_thv: T, w_qv: T) -> T:
+def w_thv_to_w_th(*, th: ArrayT, w_thv: ArrayT, w_qv: ArrayT) -> ArrayT:
     """Convert buoyancy flux (w'theta_v') to sensible heat flux (w'theta').
 
     Parameters
