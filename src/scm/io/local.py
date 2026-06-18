@@ -91,7 +91,12 @@ def out_to_ds(
     mo_ds = xr.Dataset(mo_dict, coords=coords)
     _add_metadata(mo_ds, cls=type(out.mo_traj), prefix="mo_")
 
-    ds = xr.merge([state_ds, diag_ds, mo_ds])
+    tends_dict = dataclasses.asdict(out.tends_traj)
+    tends_dict = {v: (_get_dims(v_data), v_data) for v, v_data in tends_dict.items()}
+    tends_ds = xr.Dataset(tends_dict, coords=coords)
+    _add_metadata(tends_ds, cls=type(out.tends_traj))
+
+    ds = xr.merge([state_ds, diag_ds, mo_ds, tends_ds])
 
     # Add metadata
     # keep original simulation time axis

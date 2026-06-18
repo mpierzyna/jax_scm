@@ -11,7 +11,7 @@ from scm.examples.gabls1 import get_gabls1
 from scm.interfaces import Forcing, Output, Simulation
 from scm.io.local import ds_to_dataclass
 from scm.mo import MOResult
-from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN, TendsVarsMYNN
 
 Nz = 64
 
@@ -29,7 +29,8 @@ def out() -> Output:
     diag_traj = ds_to_dataclass(ds, DiagVarsMYNN)
     mo_traj = ds_to_dataclass(ds, MOResult, prefix="mo")
     t_s = jnp.array(ds["_t_s"].values)
-    return Output(state_traj=state_traj, diag_traj=diag_traj, mo_traj=mo_traj, t_s=t_s)
+    tends_traj = ds_to_dataclass(ds, TendsVarsMYNN)
+    return Output(state_traj=state_traj, diag_traj=diag_traj, mo_traj=mo_traj, t_s=t_s, tends_traj=tends_traj)
 
 
 class TestUpdateInit:

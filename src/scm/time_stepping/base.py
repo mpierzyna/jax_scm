@@ -9,6 +9,7 @@ from scm import consts
 from scm.config import Namelist
 from scm.interfaces import ModelFn, Output, Simulation
 from scm.mynn.closure import MYNNParams
+from scm.mynn.interfaces import TendsVarsMYNN
 from scm.time_stepping.explicit import get_ab2_step_fn, get_euler_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
 from scm.time_stepping.logging import get_logger_from_cfg
@@ -38,8 +39,9 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
     Returns
     -------
     scm.interfaces.Output
-        Stacked trajectory of model state, diagnosed variables, and
-        surface layer results. Shape is `(N_out+1, ...)`.
+        Stacked trajectory of model state, diagnosed variables,
+        surface layer results, and state tendencies. Shape is `(N_out+1, ...)`.
+        Note: state tendencies are only calculated correctly when using an explicit time-stepping method.
 
     Notes
     -----
@@ -105,12 +107,19 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
     _, history = jax.lax.scan(_outer_body, init=init_carry, xs=t_outer)
     logger.on_end()
 
+    # Set up tendencies as separate object type when outputting
+    tends0 = TendsVarsMYNN(dudt=0.*sim.init.u, dvdt=0.*sim.init.v, dthdt=0.*sim.init.th,
+                           dqvdt=0.*sim.init.qv, dqkedt=0.*sim.init.qke)    # Initial state has no tendencies
+    tends_h = TendsVarsMYNN(dudt=history.prev_tends.u, dvdt=history.prev_tends.v, dthdt=history.prev_tends.th,
+                            dqvdt=history.prev_tends.qv, dqkedt=history.prev_tends.qke)
+
     # Assemble Output by merging the initial state with the trajectory
     out0 = Output(
         state_traj=jax.tree_util.tree_map(lambda x: x[None], sim.init),
         diag_traj=jax.tree_util.tree_map(lambda x: x[None], init_carry.diag),
         mo_traj=jax.tree_util.tree_map(lambda x: x[None], init_carry.mo),
         t_s=jnp.array([sim.t_start_s]),
+        tends_traj=jax.tree_util.tree_map(lambda x: x[None], tends0),
     )
 
     out_h = Output(
@@ -118,6 +127,7 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
         diag_traj=history.diag,
         mo_traj=history.mo,
         t_s=t_outer + cfg.dt_s_out,
+        tends_traj=tends_h,
     )
 
     return jax.tree_util.tree_map(lambda a, b: jnp.concatenate([a, b]), out0, out_h)

@@ -17,7 +17,7 @@ import pandas as pd
 from scm.grid import StaggeredGrid
 from scm.metadata import meta_field
 from scm.mo import MOResult, MOSettings
-from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN, TendsVarsMYNN
 
 ParamsT = TypeVar("ParamsT")
 
@@ -286,6 +286,7 @@ class Output:
     diag_traj: DiagVarsMYNN
     mo_traj: MOResult
     t_s: jnp.ndarray
+    tends_traj: TendsVarsMYNN
 
     def __len__(self) -> int:
         # If time dim is removed, no length
