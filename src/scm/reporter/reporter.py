@@ -201,7 +201,7 @@ class BaseReport:
         self.add_text("Rendered on " + datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S"))
 
         path = self.path if path_overwrite is None else path_overwrite
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(
                 tmpl_base.render(
                     title=self.title,
