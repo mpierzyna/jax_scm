@@ -11,7 +11,7 @@ from scm.examples.gabls1 import get_gabls1
 from scm.interfaces import Forcing, Output, Simulation
 from scm.io.local import ds_to_dataclass
 from scm.mo import MOResult
-from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN, TendsVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN, TendsMYNN
 
 Nz = 64
 
@@ -27,9 +27,9 @@ def out() -> Output:
     ds = xr.open_dataset(FIXTURE_ROOT / "gabls1/out_ab2.nc")
     state_traj = ds_to_dataclass(ds, ProgVarsMYNN)
     diag_traj = ds_to_dataclass(ds, DiagVarsMYNN)
-    mo_traj = ds_to_dataclass(ds, MOResult, prefix="mo")
+    mo_traj = ds_to_dataclass(ds, MOResult, format_str="mo_{}")
     t_s = jnp.array(ds["_t_s"].values)
-    tends_traj = ds_to_dataclass(ds, TendsVarsMYNN)
+    tends_traj = ds_to_dataclass(ds, TendsMYNN, format_str="d{}dt")
     return Output(state_traj=state_traj, diag_traj=diag_traj, mo_traj=mo_traj, t_s=t_s, tends_traj=tends_traj)
 
 

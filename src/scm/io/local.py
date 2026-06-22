@@ -161,32 +161,29 @@ def out_to_ds(
     return ds
 
 
-def ds_to_dataclass(ds: xr.Dataset, cls: Type[T], prefix: str = "") -> T:
+def ds_to_dataclass(ds: xr.Dataset, cls: Type[T], format_str: str = "{}") -> T:
     """Reconstruct a dataclass instance from matching variables in an xarray Dataset.
 
     Parameters
     ----------
     ds : xr.Dataset
-        Dataset whose variables include the fields of ``cls``, optionally prefixed.
+        Dataset whose variables include the fields of ``cls``, optionally decorated.
     cls : type
         Dataclass type to instantiate.
-    prefix : str, optional
-        Optional prefix prepended to each field name when looking up variables in
-        ``ds`` (a trailing underscore is added automatically if absent).
+    format_str : str, optional
+        Format string mapping each field name to its variable name in ``ds`` (the
+        inverse of the ``format_str`` used by ``out_to_ds``). For example ``"mo_{}"``
+        looks up ``mo_<field>`` and ``"d{}dt"`` looks up ``d<field>dt``. Defaults to
+        ``"{}"`` (variable name equals field name).
 
     Returns
     -------
     T
         Instance of ``cls`` populated with JAX arrays loaded from ``ds``.
     """
-    # append underscore to prefix
-    if prefix and (prefix[-1] != "_"):
-        prefix = f"{prefix}_"
-
     # Select fieldnames from dataclass
-    fields = dataclasses.fields(cls)
-    field_names = [f.name for f in fields]
+    field_names = [f.name for f in dataclasses.fields(cls)]
 
     # Select data and convert to jax
-    data = {f: jnp.array(ds[f"{prefix}{f}"].values) for f in field_names}
+    data = {f: jnp.array(ds[format_str.format(f)].values) for f in field_names}
     return cls(**data)
