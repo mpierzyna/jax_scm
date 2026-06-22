@@ -26,6 +26,20 @@ class ProgVarsMYNN:
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, kw_only=True)
+class TendsVarsMYNN:
+    """Tendencies of prognostic variables"""
+
+    dudt: jnp.ndarray = meta_field(long_name="U velocity tendency", units="m/s^2", level="full")
+    dvdt: jnp.ndarray = meta_field(long_name="V velocity tendency", units="m/s^2", level="full")
+    dthdt: jnp.ndarray = meta_field(
+        long_name="Potential temperature tendency", units="K/s", level="full"
+    )  # no condensation, so th_l = th compared to NN09
+    dqvdt: jnp.ndarray = meta_field(long_name="Specific humidity tendency", units="kg/kg/s", level="full")  # vapor only
+    dqkedt: jnp.ndarray = meta_field(long_name="TWICE turbulent kinetic energy tendency", units="m^2/s^3", level="full")
+
+
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class DiagVarsMYNN:
     """Turbulence diagnostics produced by the MYNN 2.5 closure.
 

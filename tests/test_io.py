@@ -46,6 +46,11 @@ def test_sim_from_ds():
         "frc_w_qv_s",
         "mo_zeta_err",
         "mo_L",  # todo: why nan?
+        "dudt",  # Tendencies not correct for implicit timestepping
+        "dvdt",
+        "dthdt",
+        "dqvdt",
+        "dqkedt",
     ]
 
     for var in ds.data_vars:

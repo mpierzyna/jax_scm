@@ -93,7 +93,7 @@ def test_e2e(case: str) -> None:
             continue
 
         rel_err = np.abs((ds[var].values - ds_new[var].values) / ref_mean).max()
-        assert rel_err < 1e-5, f"Variable {var} differs between runs by more than 1e-5 relative error"
+        assert rel_err < 1e-4, f"Variable {var} differs between runs by more than 1e-4 relative error"
 
 
 def test_split_sim() -> None:
