@@ -17,7 +17,7 @@ import pandas as pd
 from scm.grid import StaggeredGrid
 from scm.metadata import meta_field
 from scm.mo import MOResult, MOSettings
-from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN, TendsVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, GradVarsMYNN, ProgVarsMYNN, TendsMYNN
 
 ParamsT = TypeVar("ParamsT")
 
@@ -280,13 +280,18 @@ class Forcing:
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Output:
-    """Simulation output container."""
+    """Simulation output container.
+
+    **Attention**: Tendencies are only populated if an explicit time integration method is selected.
+    The model function output in "implicit" mode does not contain the flux divergence as the implicit solver advances
+    the state directly using sources and sinks.
+    """
 
     state_traj: ProgVarsMYNN
+    tends_traj: TendsMYNN
     diag_traj: DiagVarsMYNN
     mo_traj: MOResult
     t_s: jnp.ndarray
-    tends_traj: TendsVarsMYNN
 
     def __len__(self) -> int:
         # If time dim is removed, no length

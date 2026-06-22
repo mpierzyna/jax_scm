@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Type, TypeVar
+from typing import Callable, Type, TypeVar
 
 import pandas as pd
 import xarray as xr
@@ -57,9 +57,22 @@ def out_to_ds(
         else:
             raise ValueError(f"Unsupported number of dimensions: {a.ndim}")
 
-    def _add_metadata(ds: xr.Dataset, cls, prefix: str = "") -> None:
-        """Copy field-level metadata from a dataclass definition onto matching Dataset variables."""
-        metadata = {f"{prefix}{f.name}": f.metadata for f in dataclasses.fields(cls) if not f.metadata == {}}
+    def _add_metadata(
+        ds: xr.Dataset,
+        cls,
+        format_str: str = "{}",
+        meta_transform: Callable[[dict], dict] | None = None,
+    ) -> None:
+        """Copy field-level metadata from a dataclass definition onto matching Dataset variables.
+
+        ``meta_transform``, if given, maps each field's metadata dict to a new one before it is
+        attached (used to derive tendency metadata from the prognostic-variable metadata).
+        """
+        metadata = {
+            format_str.format(f.name): (meta_transform(dict(f.metadata)) if meta_transform else f.metadata)
+            for f in dataclasses.fields(cls)
+            if not f.metadata == {}
+        }
         for vname in ds.data_vars:
             vname = str(vname)
             if vname not in metadata:
@@ -89,12 +102,20 @@ def out_to_ds(
     mo_dict = dataclasses.asdict(out.mo_traj)
     mo_dict = {f"mo_{v}": (("time",), v_data) for v, v_data in mo_dict.items()}
     mo_ds = xr.Dataset(mo_dict, coords=coords)
-    _add_metadata(mo_ds, cls=type(out.mo_traj), prefix="mo_")
+    _add_metadata(mo_ds, cls=type(out.mo_traj), format_str="mo_{}")
+
+    def _to_tend_meta(meta: dict) -> dict:
+        """Derive tendency metadata from a prognostic field's metadata (units per second)."""
+        if "long_name" in meta:
+            meta["long_name"] = f"{meta['long_name']} tendency"
+        if "units" in meta:
+            meta["units"] = f"{meta['units']}/s"
+        return meta
 
     tends_dict = dataclasses.asdict(out.tends_traj)
-    tends_dict = {v: (_get_dims(v_data), v_data) for v, v_data in tends_dict.items()}
+    tends_dict = {f"d{v}dt": (_get_dims(v_data), v_data) for v, v_data in tends_dict.items()}
     tends_ds = xr.Dataset(tends_dict, coords=coords)
-    _add_metadata(tends_ds, cls=type(out.tends_traj))
+    _add_metadata(tends_ds, cls=type(out.tends_traj), format_str="d{}dt", meta_transform=_to_tend_meta)
 
     ds = xr.merge([state_ds, diag_ds, mo_ds, tends_ds])
 
@@ -125,7 +146,7 @@ def out_to_ds(
             if v_data is not None
         }
         forcing_ds = xr.Dataset(forcing_dict, coords=coords)
-        _add_metadata(forcing_ds, cls=type(sim.forcing), prefix="frc_")
+        _add_metadata(forcing_ds, cls=type(sim.forcing), format_str="frc_{}")
         ds = xr.merge([ds, forcing_ds])
     except Exception as e:
         print(f"Warning: Could not sample forcing for output dataset. Error: {e}")

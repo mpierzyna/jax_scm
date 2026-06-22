@@ -6,14 +6,23 @@ import jax
 from jax import numpy as jnp
 
 from scm import consts
-from scm.config import Namelist
+from scm.config import Namelist, TimeIntMethod
 from scm.interfaces import ModelFn, Output, Simulation
 from scm.mynn.closure import MYNNParams
-from scm.mynn.interfaces import TendsVarsMYNN
 from scm.time_stepping.explicit import get_ab2_step_fn, get_euler_step_fn
 from scm.time_stepping.implicit import get_cn_step_fn
 from scm.time_stepping.logging import get_logger_from_cfg
 from scm.time_stepping.utils import StepCarry
+
+
+def _guard_tends_output(tends, time_int_method: TimeIntMethod):
+    """Zero tendency output for implicit solver as flux divergence and other sources/sinks are missing."""
+    if time_int_method == TimeIntMethod.EXPLICIT:
+        return tends
+    else:
+        # The implicit solver solves the flux divergence "externally", so the tendencies returned by the model
+        # are not complete. To avoid confusion, we zero them out.
+        return jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), tends)
 
 
 def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Output:
@@ -57,7 +66,7 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
     # Configure the time integration stepper.  Each `_step_fn` returns
     # (new_carry, output, info) where `info` is a dict of scalar JAX arrays
     # that the logger may surface (empty for fixed-timestep schemes).
-    if cfg.time_int == "explicit" and cfg.adaptive_timestep is not None:
+    if cfg.time_int == TimeIntMethod.EXPLICIT and cfg.adaptive_timestep is not None:
         _warmup = get_euler_step_fn(model)
         _ab2 = get_ab2_step_fn(model)
 
@@ -79,7 +88,7 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
             return new_carry, new_carry, info
 
     else:
-        if cfg.time_int == "explicit":
+        if cfg.time_int == TimeIntMethod.EXPLICIT:
             _warmup = get_euler_step_fn(model)
             _step = get_ab2_step_fn(model)
         else:
@@ -107,27 +116,23 @@ def simulate(model: ModelFn, sim: Simulation, cfg: Namelist, params=None) -> Out
     _, history = jax.lax.scan(_outer_body, init=init_carry, xs=t_outer)
     logger.on_end()
 
-    # Set up tendencies as separate object type when outputting
-    tends0 = TendsVarsMYNN(dudt=0.*sim.init.u, dvdt=0.*sim.init.v, dthdt=0.*sim.init.th,
-                           dqvdt=0.*sim.init.qv, dqkedt=0.*sim.init.qke)    # Initial state has no tendencies
-    tends_h = TendsVarsMYNN(dudt=history.prev_tends.u, dvdt=history.prev_tends.v, dthdt=history.prev_tends.th,
-                            dqvdt=history.prev_tends.qv, dqkedt=history.prev_tends.qke)
-
     # Assemble Output by merging the initial state with the trajectory
     out0 = Output(
         state_traj=jax.tree_util.tree_map(lambda x: x[None], sim.init),
+        tends_traj=jax.tree_util.tree_map(
+            lambda x: jnp.zeros_like(x)[None], sim.init
+        ),  # initial state has no tendencies
         diag_traj=jax.tree_util.tree_map(lambda x: x[None], init_carry.diag),
         mo_traj=jax.tree_util.tree_map(lambda x: x[None], init_carry.mo),
         t_s=jnp.array([sim.t_start_s]),
-        tends_traj=jax.tree_util.tree_map(lambda x: x[None], tends0),
     )
 
     out_h = Output(
         state_traj=history.y,
+        tends_traj=_guard_tends_output(history.prev_tends, time_int_method=cfg.time_int),
         diag_traj=history.diag,
         mo_traj=history.mo,
         t_s=t_outer + cfg.dt_s_out,
-        tends_traj=tends_h,
     )
 
     return jax.tree_util.tree_map(lambda a, b: jnp.concatenate([a, b]), out0, out_h)

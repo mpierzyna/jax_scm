@@ -9,7 +9,7 @@ from jax import numpy as jnp
 
 from scm import consts
 from scm.mo import MOResult
-from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN
+from scm.mynn.interfaces import DiagVarsMYNN, ProgVarsMYNN, TendsMYNN
 
 
 @jax.tree_util.register_dataclass
@@ -24,10 +24,10 @@ class StepCarry:
     """
 
     y: ProgVarsMYNN
-    prev_tends: ProgVarsMYNN  # explicit tendencies at t-1 (AB2 history)
-    prev_mo: MOResult  # MO result at t-1 (AB2 history for CN surface fluxes)
     diag: DiagVarsMYNN  # diagnostics at t (for K in CN and output collection)
     mo: MOResult  # MO result at t (output collection)
+    prev_tends: TendsMYNN  # explicit tendencies at t-1 (AB2 history)
+    prev_mo: MOResult  # MO result at t-1 (AB2 history for CN surface fluxes)
 
 
 def clip_state(y: ProgVarsMYNN) -> ProgVarsMYNN:

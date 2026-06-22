@@ -26,20 +26,6 @@ class ProgVarsMYNN:
 
 @jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class TendsVarsMYNN:
-    """Tendencies of prognostic variables"""
-
-    dudt: jnp.ndarray = meta_field(long_name="U velocity tendency", units="m/s^2", level="full")
-    dvdt: jnp.ndarray = meta_field(long_name="V velocity tendency", units="m/s^2", level="full")
-    dthdt: jnp.ndarray = meta_field(
-        long_name="Potential temperature tendency", units="K/s", level="full"
-    )  # no condensation, so th_l = th compared to NN09
-    dqvdt: jnp.ndarray = meta_field(long_name="Specific humidity tendency", units="kg/kg/s", level="full")  # vapor only
-    dqkedt: jnp.ndarray = meta_field(long_name="TWICE turbulent kinetic energy tendency", units="m^2/s^3", level="full")
-
-
-@jax.tree_util.register_dataclass
-@dataclasses.dataclass(frozen=True, kw_only=True)
 class DiagVarsMYNN:
     """Turbulence diagnostics produced by the MYNN 2.5 closure.
 
@@ -82,6 +68,16 @@ class DiagVarsMYNN:
 GradVarsMYNN = ProgVarsMYNN
 """Alias for :class:`ProgVarsMYNN` representing vertical gradients of the MYNN prognostic variables.
 
-Each field holds ``Nz+1`` values on half-levels rather than ``Nz`` values on full levels.
-The alias avoids duplicating the dataclass definition while keeping call sites self-documenting.
+Fields hold `Nz+1` values on half-levels rather than `Nz` values on full levels. Also note that units in meta data
+should be divided by "m" to reflect vertical gradient. We still go for aliasing instead of duplicating dataclass
+to simplify future refactoring and typing.
+"""
+
+TendsMYNN = ProgVarsMYNN
+"""Alias for :class:`ProgVarsMYNN` representing time tendencies of the MYNN prognostic variables.
+
+Each field is the per-second rate of change of the corresponding prognostic variable. The closure and time
+steppers operate on plain :class:`ProgVarsMYNN`, so aliasing keeps `state +/- dt * tend` arithmetic structurally
+compatible under `jax.tree_util.tree_map`. Tendency units/long-names are derived on output (see `out_to_ds`) by
+appending "/s" / " tendency" to the prognostic metadata, so they are not duplicated here.
 """
